@@ -21,31 +21,77 @@ function Refresh-Path {
 
 function Find-Git {
     $cmd = Get-Command git -ErrorAction SilentlyContinue
-    if ($cmd) { return $cmd.Source }
+    if ($cmd -and $cmd.Source) { return $cmd.Source }
     $candidate = Join-Path $env:ProgramFiles 'Git\cmd\git.exe'
     if (Test-Path $candidate) { return $candidate }
     return $null
 }
 
+function Test-RealPython($Exe, $WantedVersion) {
+    try {
+        $raw = @(& $Exe -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>$null)
+        $exitCode = $LASTEXITCODE
+        $version = (($raw | Out-String).Trim())
+        return ($exitCode -eq 0 -and $version -eq $WantedVersion)
+    } catch {
+        return $false
+    }
+}
+
 function Find-Python312 {
     $py = Get-Command py -ErrorAction SilentlyContinue
-    if ($py) {
+    if ($py -and $py.Source) {
         try {
-            $path = & $py.Source -3.12 -c "import sys; print(sys.executable)" 2>$null
-            if ($LASTEXITCODE -eq 0 -and $path -and (Test-Path $path.Trim())) { return $path.Trim() }
+            $raw = @(& $py.Source -3.12 -c "import sys; print(sys.executable)" 2>$null)
+            $exitCode = $LASTEXITCODE
+            $path = (($raw | Out-String).Trim())
+            if ($exitCode -eq 0 -and $path -and (Test-Path $path) -and (Test-RealPython $path '3.12')) { return $path }
         } catch {}
     }
+
     $candidates = @(
         (Join-Path $env:LOCALAPPDATA 'Programs\Python\Python312\python.exe'),
         (Join-Path $env:ProgramFiles 'Python312\python.exe')
     )
-    foreach($p in $candidates) { if (Test-Path $p) { return $p } }
-    $python = Get-Command python -ErrorAction SilentlyContinue
-    if ($python) {
-        $v = & $python.Source -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"
-        if ($v.Trim() -eq '3.12') { return $python.Source }
+    foreach($p in $candidates) {
+        if ((Test-Path $p) -and (Test-RealPython $p '3.12')) { return $p }
     }
+
+    $python = Get-Command python -ErrorAction SilentlyContinue
+    if ($python -and $python.Source -and (Test-RealPython $python.Source '3.12')) { return $python.Source }
     return $null
+}
+
+function Download-RepoZip($Repo, $Branch, $Target, $Label) {
+    $zip = Join-Path $env:TEMP ("gpt-cleaner-" + [guid]::NewGuid().ToString('N') + '.zip')
+    $tmp = Join-Path $env:TEMP ("gpt-cleaner-" + [guid]::NewGuid().ToString('N'))
+    $url = "https://codeload.github.com/$Repo/zip/refs/heads/$Branch"
+    try {
+        Write-Host "Git clone unavailable/unstable, using codeload zip for $Label..." -ForegroundColor Yellow
+        Invoke-WebRequest -UseBasicParsing -Uri $url -OutFile $zip -TimeoutSec 180
+        New-Item -ItemType Directory -Force -Path $tmp | Out-Null
+        Expand-Archive -Path $zip -DestinationPath $tmp -Force
+        $child = Get-ChildItem $tmp -Directory | Select-Object -First 1
+        if (-not $child) { throw "Downloaded zip contained no directory" }
+        if (Test-Path $Target) { Remove-Item $Target -Recurse -Force }
+        New-Item -ItemType Directory -Force -Path (Split-Path -Parent $Target) | Out-Null
+        Move-Item $child.FullName $Target
+    } catch {
+        Die "$Label download failed: $($_.Exception.Message)"
+    } finally {
+        Remove-Item $zip -Force -ErrorAction SilentlyContinue
+        Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+
+function Install-Repo($GitExe, $Repo, $Branch, $Target, $Label) {
+    if (Test-Path $Target) { return }
+    & $GitExe clone --depth 1 --branch $Branch "https://github.com/$Repo.git" $Target
+    $cloneExit = $LASTEXITCODE
+    if ($cloneExit -ne 0 -or -not (Test-Path $Target)) {
+        Remove-Item $Target -Recurse -Force -ErrorAction SilentlyContinue
+        Download-RepoZip $Repo $Branch $Target $Label
+    }
 }
 
 Set-Location $Root
@@ -58,13 +104,16 @@ if (-not $nvidia) {
     if (Test-Path $nv) { $nvidia = Get-Item $nv }
 }
 if (-not $nvidia) { Die 'nvidia-smi not found. Install/update the NVIDIA driver first.' }
-$gpuLine = & $nvidia.Source --query-gpu=name,memory.total --format=csv,noheader,nounits | Select-Object -First 1
-if ($LASTEXITCODE -ne 0 -or -not $gpuLine) { Die 'NVIDIA GPU query failed.' }
+$gpuOutput = @(& $nvidia.Source --query-gpu=name,memory.total --format=csv,noheader,nounits 2>$null)
+$gpuExit = $LASTEXITCODE
+$gpuLine = $gpuOutput | Where-Object { $_ -and $_.Trim() } | Select-Object -First 1
+if ($gpuExit -ne 0 -or -not $gpuLine) { Die 'NVIDIA GPU query failed.' }
 $parts = $gpuLine -split ','
+if ($parts.Count -lt 2) { Die "Unexpected nvidia-smi output: $gpuLine" }
 $gpuName = $parts[0].Trim()
 $vramMB = [int](($parts[1]).Trim())
 Write-Host "GPU: $gpuName | VRAM: $vramMB MB" -ForegroundColor Green
-if ($vramMB -lt 6000) { Die 'Less than 6 GB VRAM is not supported by the V0 preset.' }
+if ($vramMB -lt 6000) { Die 'Less than 6 GB VRAM is not supported by the current preset.' }
 
 Step 'Checking Git'
 $git = Find-Git
@@ -100,33 +149,46 @@ $Vpy = Join-Path $Venv 'Scripts\python.exe'
 if ($LASTEXITCODE -ne 0) { Die 'pip bootstrap failed.' }
 
 Step 'Installing PyTorch CUDA 12.8 runtime'
-& $Vpy -m pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
+& $Vpy -m pip install --timeout 180 --retries 8 torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
 if ($LASTEXITCODE -ne 0) { Die 'PyTorch CUDA installation failed.' }
 
 Step 'Installing ComfyUI'
-if (-not (Test-Path $Comfy)) {
-    & $git clone --depth 1 https://github.com/Comfy-Org/ComfyUI.git $Comfy
-    if ($LASTEXITCODE -ne 0) { Die 'ComfyUI clone failed.' }
-}
-& $Vpy -m pip install -r (Join-Path $Comfy 'requirements.txt')
+Install-Repo $git 'Comfy-Org/ComfyUI' 'master' $Comfy 'ComfyUI'
+& $Vpy -m pip install --timeout 180 --retries 8 -r (Join-Path $Comfy 'requirements.txt')
 if ($LASTEXITCODE -ne 0) { Die 'ComfyUI requirements installation failed.' }
 
 Step 'Installing CCSR ComfyUI node'
 $CustomNodes = Join-Path $Comfy 'custom_nodes'
 $CCSRNode = Join-Path $CustomNodes 'ComfyUI-CCSR'
 New-Item -ItemType Directory -Force -Path $CustomNodes | Out-Null
-if (-not (Test-Path $CCSRNode)) {
-    & $git clone --depth 1 https://github.com/kijai/ComfyUI-CCSR.git $CCSRNode
-    if ($LASTEXITCODE -ne 0) { Die 'ComfyUI-CCSR clone failed.' }
-}
+Install-Repo $git 'kijai/ComfyUI-CCSR' 'main' $CCSRNode 'ComfyUI-CCSR'
 $nodeReq = Join-Path $CCSRNode 'requirements.txt'
 if (Test-Path $nodeReq) {
-    & $Vpy -m pip install -r $nodeReq
+    & $Vpy -m pip install --timeout 180 --retries 8 -r $nodeReq
     if ($LASTEXITCODE -ne 0) { Die 'CCSR node requirements installation failed.' }
 }
 
+# Newer ComfyUI versions no longer guarantee custom_nodes is on sys.path.
+# ComfyUI-CCSR dynamically imports modules through its package folder name, so register the parent explicitly.
+$nodeInit = Join-Path $CCSRNode '__init__.py'
+if (Test-Path $nodeInit) {
+    $initText = Get-Content $nodeInit -Raw
+    $marker = '# GPT_CLEANER_SYSPATH_COMPAT'
+    if ($initText -notmatch [regex]::Escape($marker)) {
+        $compat = @"
+$marker
+import os as _gc_os, sys as _gc_sys
+_gc_custom_nodes = _gc_os.path.dirname(_gc_os.path.dirname(_gc_os.path.abspath(__file__)))
+if _gc_custom_nodes not in _gc_sys.path:
+    _gc_sys.path.insert(0, _gc_custom_nodes)
+
+"@
+        Set-Content -Path $nodeInit -Value ($compat + $initText) -Encoding UTF8
+    }
+}
+
 Step 'Installing GPT Cleaner web runtime'
-& $Vpy -m pip install -r (Join-Path $Root 'app\requirements.txt')
+& $Vpy -m pip install --timeout 180 --retries 8 -r (Join-Path $Root 'app\requirements.txt')
 if ($LASTEXITCODE -ne 0) { Die 'GPT Cleaner app requirements installation failed.' }
 
 Step 'Downloading fp16 CCSR model'
@@ -137,7 +199,13 @@ if (-not (Test-Path $ModelPath)) {
     $env:HF_HUB_DISABLE_XET = '1'
     $download = "from huggingface_hub import snapshot_download; snapshot_download(repo_id='Kijai/ccsr-safetensors', allow_patterns=['*real-world_ccsr-fp16.safetensors*'], local_dir=r'$ModelDir')"
     & $Vpy -c $download
-    if ($LASTEXITCODE -ne 0) { Die 'CCSR model download failed.' }
+    if ($LASTEXITCODE -ne 0 -or -not (Test-Path $ModelPath)) {
+        Write-Host 'Hugging Face direct download failed. Retrying through hf-mirror.com...' -ForegroundColor Yellow
+        $env:HF_ENDPOINT = 'https://hf-mirror.com'
+        & $Vpy -c $download
+        Remove-Item Env:HF_ENDPOINT -ErrorAction SilentlyContinue
+    }
+    if ($LASTEXITCODE -ne 0 -or -not (Test-Path $ModelPath)) { Die 'CCSR model download failed on both direct and mirror routes.' }
 }
 
 Step 'Writing VRAM-aware local config'
