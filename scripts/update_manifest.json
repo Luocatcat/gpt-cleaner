@@ -1,0 +1,49 @@
+{
+  "source_items": [
+    "README.md",
+    "AGENTS.md",
+    "WINDOWS_AGENT_PROMPT.md",
+    ".gitignore",
+    "install.ps1",
+    "doctor.ps1",
+    "start.ps1",
+    "update.ps1",
+    "START_GPT_CLEANER.bat",
+    "UPDATE_GPT_CLEANER.bat",
+    "app",
+    "web",
+    "scripts",
+    "config"
+  ],
+  "preserve_paths": [
+    "runtime",
+    "config/local.json"
+  ],
+  "runtime_actions": [
+    "refresh_app_requirements",
+    "update_comfy_core_if_supir_missing",
+    "download_missing_semantic_models",
+    "preserve_legacy_ccsr"
+  ],
+  "comfy_preserve": [
+    ".git",
+    "models",
+    "custom_nodes",
+    "input",
+    "output",
+    "temp",
+    "user"
+  ],
+  "semantic_models": [
+    {
+      "repo_id": "AiWise/Juggernaut-XL-V9-GE-RDPhoto2-Lightning_4S",
+      "filename": "juggernautXL_v9Rdphoto2Lightning.safetensors",
+      "directory": "checkpoints"
+    },
+    {
+      "repo_id": "Kijai/SUPIR_pruned",
+      "filename": "SUPIR-v0Q_fp16.safetensors",
+      "directory": "model_patches"
+    }
+  ]
+}
