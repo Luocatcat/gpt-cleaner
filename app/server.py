@@ -26,7 +26,8 @@ def load_config() -> dict:
     config_path = CONFIG_DIR / "local.json"
     if not config_path.exists():
         config_path = CONFIG_DIR / "default.json"
-    with config_path.open("r", encoding="utf-8") as f:
+    # utf-8-sig also accepts ordinary UTF-8 and safely handles Windows PowerShell BOM output.
+    with config_path.open("r", encoding="utf-8-sig") as f:
         return json.load(f)
 
 
