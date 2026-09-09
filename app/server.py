@@ -13,6 +13,7 @@ from flask import Flask, jsonify, request, send_file, send_from_directory
 from PIL import Image
 from werkzeug.utils import secure_filename
 
+from app.comfy_workflows import build_ccsr_prompt
 from app.configuration import load_config
 from app.image_ops import image_to_png_bytes, preclean_image, resize_exact
 
@@ -107,58 +108,6 @@ def upload_to_comfy(path: Path) -> str:
         data = {"overwrite": "true", "type": "input"}
         payload = comfy_post("/upload/image", files=files, data=data).json()
     return payload.get("name", path.name)
-
-
-def build_prompt(input_name: str, preset_name: str, structure_protection: float) -> dict:
-    preset = get_preset(preset_name)
-
-    protection = clamp_float(structure_protection, 0.0, 1.0, 0.92)
-    # V0 was far too generative. Keep the CCSR sampling window narrow; the post-pass
-    # will also reinject original structure before the result is returned.
-    t_max = float(preset["t_max"]) - protection * 0.035
-    t_min = float(preset["t_min"]) + protection * 0.018
-    if t_min >= t_max:
-        t_min = max(0.05, t_max - 0.06)
-
-    return {
-        "1": {
-            "class_type": "LoadImage",
-            "inputs": {"image": input_name},
-        },
-        "2": {
-            "class_type": "DownloadAndLoadCCSRModel",
-            "inputs": {"model": CONFIG.get("model", "real-world_ccsr-fp16.safetensors")},
-        },
-        "3": {
-            "class_type": "CCSR_Upscale",
-            "inputs": {
-                "ccsr_model": ["2", 0],
-                "image": ["1", 0],
-                # Generation is always done at 1x. Final 2x/4x output happens after
-                # structure reinjection, keeping memory predictable on 8 GB cards.
-                "resize_method": "lanczos",
-                "scale_by": 1.0,
-                "steps": int(preset["steps"]),
-                "t_max": round(t_max, 4),
-                "t_min": round(t_min, 4),
-                "sampling_method": CONFIG.get("sampling_method", "ccsr_tiled_vae_gaussian_weights"),
-                "tile_size": int(CONFIG.get("tile_size", 256)),
-                "tile_stride": int(CONFIG.get("tile_stride", 128)),
-                "vae_tile_size_encode": int(CONFIG.get("vae_tile_encode", 512)),
-                "vae_tile_size_decode": int(CONFIG.get("vae_tile_decode", 512)),
-                "color_fix_type": CONFIG.get("color_fix", "wavelet"),
-                "keep_model_loaded": False,
-                "seed": 123,
-            },
-        },
-        "4": {
-            "class_type": "SaveImage",
-            "inputs": {
-                "images": ["3", 0],
-                "filename_prefix": "gpt_cleaner",
-            },
-        },
-    }
 
 
 def queue_and_wait(prompt: dict, timeout_seconds: int = 900) -> dict:
@@ -265,7 +214,12 @@ def clean():
             # Explicitly fail with a useful message if the optional generative engine is down.
             comfy_get("/system_stats", timeout=4)
             comfy_name = upload_to_comfy(input_path)
-            prompt = build_prompt(comfy_name, preset_name, structure)
+            prompt = build_ccsr_prompt(
+                comfy_name,
+                get_preset(preset_name),
+                structure,
+                CONFIG["ccsr"],
+            )
             output_meta = queue_and_wait(prompt)
             generated_bytes = fetch_output_image(output_meta)
             generated = Image.open(io.BytesIO(generated_bytes)).convert("RGB")
