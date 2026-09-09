@@ -14,6 +14,7 @@ from PIL import Image
 from werkzeug.utils import secure_filename
 
 from app.configuration import load_config
+from app.image_ops import image_to_png_bytes, preclean_image, resize_exact
 
 ROOT = Path(__file__).resolve().parents[1]
 WEB_DIR = ROOT / "web"
@@ -53,66 +54,6 @@ def clamp_float(value, low: float, high: float, fallback: float) -> float:
 def get_preset(name: str) -> dict:
     presets = CONFIG["presets"]
     return presets.get(name, presets["standard"])
-
-
-def _robust_edge_mask(luma: np.ndarray) -> np.ndarray:
-    blurred = cv2.GaussianBlur(luma, (0, 0), 1.0)
-    gx = cv2.Sobel(blurred, cv2.CV_32F, 1, 0, ksize=3)
-    gy = cv2.Sobel(blurred, cv2.CV_32F, 0, 1, ksize=3)
-    mag = cv2.magnitude(gx, gy)
-    positive = mag[mag > 0]
-    if positive.size == 0:
-        return np.zeros_like(mag, dtype=np.float32)
-    denom = float(np.percentile(positive, 92))
-    if denom < 1e-6:
-        denom = 1.0
-    return np.clip(mag / denom, 0.0, 1.0) ** 0.75
-
-
-def preclean_image(image: Image.Image, preset_name: str, structure_protection: float) -> Image.Image:
-    """Suppress AI micro-texture while retaining structural edges.
-
-    This is intentionally deterministic. It does not invent new anatomy or shapes.
-    The cleaner works mostly in luminance so colors stay close to the original.
-    """
-    preset = get_preset(preset_name)
-    rgb = np.asarray(image.convert("RGB"), dtype=np.uint8)
-    lab = cv2.cvtColor(rgb, cv2.COLOR_RGB2LAB)
-    luma = lab[:, :, 0]
-
-    smooth = cv2.bilateralFilter(
-        luma,
-        d=int(preset["bilateral_d"]),
-        sigmaColor=float(preset["bilateral_sigma_color"]),
-        sigmaSpace=float(preset["bilateral_sigma_space"]),
-    )
-
-    edge = _robust_edge_mask(luma)
-    base_strength = float(preset["preclean_strength"])
-    # Strict structure protection reduces cleanup globally, then edge masking restores
-    # nearly all strong structural boundaries even when the preset is heavy.
-    strength = base_strength * (1.08 - 0.34 * structure_protection)
-    strength = float(np.clip(strength, 0.04, 0.62))
-    edge_preserve = float(preset.get("edge_preserve", 0.9))
-
-    luma_f = luma.astype(np.float32)
-    smooth_f = smooth.astype(np.float32)
-    high = luma_f - smooth_f
-    detail_keep = (1.0 - strength) + strength * edge * edge_preserve
-    cleaned_luma = np.clip(smooth_f + high * detail_keep, 0, 255).astype(np.uint8)
-
-    out_lab = lab.copy()
-    out_lab[:, :, 0] = cleaned_luma
-    out_rgb = cv2.cvtColor(out_lab, cv2.COLOR_LAB2RGB)
-    return Image.fromarray(out_rgb)
-
-
-def resize_exact(image: Image.Image, scale: float) -> Image.Image:
-    if abs(scale - 1.0) < 1e-6:
-        return image
-    w, h = image.size
-    target = (max(1, int(round(w * scale))), max(1, int(round(h * scale))))
-    return image.resize(target, Image.Resampling.LANCZOS)
 
 
 def structure_reinject(
@@ -256,12 +197,6 @@ def fetch_output_image(meta: dict) -> bytes:
     return response.content
 
 
-def image_to_png_bytes(image: Image.Image) -> bytes:
-    buf = io.BytesIO()
-    image.convert("RGB").save(buf, format="PNG", optimize=False)
-    return buf.getvalue()
-
-
 @app.get("/")
 def index():
     return send_from_directory(WEB_DIR, "index.html")
@@ -316,7 +251,7 @@ def clean():
     except Exception as exc:  # noqa: BLE001
         return jsonify({"error": f"Invalid image: {exc}"}), 400
 
-    cleaned = preclean_image(original, preset_name, structure)
+    cleaned = preclean_image(original, get_preset(preset_name), structure)
     safe_stem = Path(secure_filename(uploaded.filename)).stem or "image"
 
     if mode == "safe":
