@@ -24,18 +24,21 @@ if (-not (Test-Path $Vpy)) {
 }
 
 $comfyReady = Wait-Url 'http://127.0.0.1:8188/system_stats' 2
-if (-not $comfyReady) {
-    Write-Host 'Starting ComfyUI engine...' -ForegroundColor Cyan
+if (-not $comfyReady -and (Test-Path (Join-Path $Comfy 'main.py'))) {
+    Write-Host 'Starting optional ComfyUI AI-refine engine...' -ForegroundColor Cyan
     $args = @('main.py','--listen','127.0.0.1','--port','8188','--lowvram','--disable-auto-launch')
     Start-Process -FilePath $Vpy -ArgumentList $args -WorkingDirectory $Comfy -WindowStyle Hidden `
         -RedirectStandardOutput (Join-Path $Logs 'comfy.out.log') `
         -RedirectStandardError (Join-Path $Logs 'comfy.err.log')
-    if (-not (Wait-Url 'http://127.0.0.1:8188/system_stats' 120)) {
-        Write-Host 'ComfyUI did not become ready. Check runtime/logs/comfy.err.log' -ForegroundColor Red
-        exit 1
-    }
+    $comfyReady = Wait-Url 'http://127.0.0.1:8188/system_stats' 120
 }
-Write-Host 'ComfyUI ready on localhost:8188' -ForegroundColor Green
+
+if ($comfyReady) {
+    Write-Host 'AI refine ready on localhost:8188' -ForegroundColor Green
+} else {
+    Write-Host 'AI refine is not ready. GPT Cleaner will still open in SAFE cleanup mode.' -ForegroundColor Yellow
+    Write-Host 'If needed, inspect runtime/logs/comfy.err.log and run doctor.ps1.' -ForegroundColor Yellow
+}
 
 $webReady = Wait-Url 'http://127.0.0.1:8787/api/health' 2
 if (-not $webReady) {
