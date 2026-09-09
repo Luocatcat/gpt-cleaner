@@ -7,35 +7,42 @@
   "tile_stride": 128,
   "vae_tile_encode": 512,
   "vae_tile_decode": 512,
-  "sampling_method": "ccsr_tiled_mixdiff",
-  "color_fix": "adain",
+  "sampling_method": "ccsr_tiled_vae_gaussian_weights",
+  "color_fix": "wavelet",
+  "default_mode": "safe",
   "presets": {
     "light": {
-      "preclean_strength": 0.22,
+      "preclean_strength": 0.24,
       "bilateral_d": 5,
       "bilateral_sigma_color": 18,
       "bilateral_sigma_space": 18,
-      "steps": 16,
-      "t_max": 0.58,
-      "t_min": 0.34
+      "edge_preserve": 0.92,
+      "steps": 8,
+      "t_max": 0.48,
+      "t_min": 0.38,
+      "gen_detail_mix": 0.12
     },
     "standard": {
-      "preclean_strength": 0.38,
+      "preclean_strength": 0.36,
       "bilateral_d": 7,
-      "bilateral_sigma_color": 28,
-      "bilateral_sigma_space": 28,
-      "steps": 24,
-      "t_max": 0.64,
-      "t_min": 0.32
+      "bilateral_sigma_color": 26,
+      "bilateral_sigma_space": 26,
+      "edge_preserve": 0.90,
+      "steps": 12,
+      "t_max": 0.54,
+      "t_min": 0.40,
+      "gen_detail_mix": 0.20
     },
     "heavy": {
-      "preclean_strength": 0.55,
+      "preclean_strength": 0.50,
       "bilateral_d": 9,
-      "bilateral_sigma_color": 42,
-      "bilateral_sigma_space": 42,
-      "steps": 32,
-      "t_max": 0.70,
-      "t_min": 0.28
+      "bilateral_sigma_color": 38,
+      "bilateral_sigma_space": 38,
+      "edge_preserve": 0.88,
+      "steps": 16,
+      "t_max": 0.60,
+      "t_min": 0.38,
+      "gen_detail_mix": 0.28
     }
   }
 }
