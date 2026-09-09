@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import io
-import json
 import os
 import time
 import uuid
@@ -14,6 +13,8 @@ from flask import Flask, jsonify, request, send_file, send_from_directory
 from PIL import Image
 from werkzeug.utils import secure_filename
 
+from app.configuration import load_config
+
 ROOT = Path(__file__).resolve().parents[1]
 WEB_DIR = ROOT / "web"
 CONFIG_DIR = ROOT / "config"
@@ -22,15 +23,7 @@ WORK_DIR = RUNTIME_DIR / "requests"
 WORK_DIR.mkdir(parents=True, exist_ok=True)
 
 
-def load_config() -> dict:
-    config_path = CONFIG_DIR / "local.json"
-    if not config_path.exists():
-        config_path = CONFIG_DIR / "default.json"
-    with config_path.open("r", encoding="utf-8-sig") as f:
-        return json.load(f)
-
-
-CONFIG = load_config()
+CONFIG = load_config(CONFIG_DIR)
 COMFY_URL = os.environ.get("GPT_CLEANER_COMFY_URL", CONFIG.get("comfy_url", "http://127.0.0.1:8188"))
 
 app = Flask(__name__, static_folder=str(WEB_DIR), static_url_path="")
