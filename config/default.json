@@ -1,0 +1,41 @@
+{
+  "comfy_url": "http://127.0.0.1:8188",
+  "web_host": "0.0.0.0",
+  "web_port": 8787,
+  "model": "real-world_ccsr-fp16.safetensors",
+  "tile_size": 256,
+  "tile_stride": 128,
+  "vae_tile_encode": 512,
+  "vae_tile_decode": 512,
+  "sampling_method": "ccsr_tiled_mixdiff",
+  "color_fix": "adain",
+  "presets": {
+    "light": {
+      "preclean_strength": 0.22,
+      "bilateral_d": 5,
+      "bilateral_sigma_color": 18,
+      "bilateral_sigma_space": 18,
+      "steps": 16,
+      "t_max": 0.58,
+      "t_min": 0.34
+    },
+    "standard": {
+      "preclean_strength": 0.38,
+      "bilateral_d": 7,
+      "bilateral_sigma_color": 28,
+      "bilateral_sigma_space": 28,
+      "steps": 24,
+      "t_max": 0.64,
+      "t_min": 0.32
+    },
+    "heavy": {
+      "preclean_strength": 0.55,
+      "bilateral_d": 9,
+      "bilateral_sigma_color": 42,
+      "bilateral_sigma_space": 42,
+      "steps": 32,
+      "t_max": 0.70,
+      "t_min": 0.28
+    }
+  }
+}
