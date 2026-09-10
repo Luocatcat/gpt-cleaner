@@ -3,40 +3,43 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>GPT Cleaner</title>
+  <title>GPT Cleaner V0.3</title>
   <style>
-    :root{color-scheme:dark;--bg:#0b0d10;--panel:#12151a;--line:#242932;--text:#f5f7fa;--muted:#8f98a5;--accent:#fff;--soft:#1a1f26;--warn:#e8b76a}
-    *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}
-    main{width:min(1040px,calc(100% - 32px));margin:0 auto;padding:64px 0 80px}
-    header{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;margin-bottom:34px}.brand h1{margin:0;font-size:38px;letter-spacing:-1.6px}.brand p{margin:8px 0 0;color:var(--muted);font-size:14px}.status{font-size:12px;color:var(--muted);display:flex;gap:8px;align-items:center}.dot{width:7px;height:7px;border-radius:999px;background:#69717d}.dot.ok{background:#59d98e}.dot.partial{background:#e8b76a}.dot.bad{background:#ff7a7a}
-    .drop{border:1px dashed #3b424d;border-radius:20px;background:var(--panel);min-height:250px;display:grid;place-items:center;text-align:center;padding:28px;cursor:pointer;transition:.2s}.drop.drag,.drop:hover{border-color:#717b89;background:#151920}.drop strong{font-size:18px}.drop span{display:block;margin-top:8px;color:var(--muted);font-size:13px}.drop img{max-width:100%;max-height:460px;border-radius:12px;display:none}
-    .controls{display:grid;grid-template-columns:1.05fr 1fr 1fr .8fr;gap:14px;margin-top:14px}.control{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px}.label{font-size:12px;color:var(--muted);margin-bottom:12px}.seg{display:flex;gap:6px}.seg button{flex:1;border:1px solid var(--line);background:var(--soft);color:#b6bec9;padding:10px 8px;border-radius:10px;cursor:pointer}.seg button.active{background:#f2f4f7;color:#090b0e;border-color:#f2f4f7}.range-row{display:flex;gap:12px;align-items:center}.range-row input{width:100%;accent-color:#fff}.range-row output{font-size:12px;color:var(--muted);min-width:30px;text-align:right}.hint{margin-top:10px;font-size:11px;line-height:1.45;color:var(--muted)}.hint.warn{color:var(--warn)}
-    .go{width:100%;margin-top:14px;border:0;border-radius:14px;background:#f4f6f8;color:#090b0d;padding:15px 18px;font-size:15px;font-weight:700;cursor:pointer}.go:disabled{opacity:.42;cursor:not-allowed}.msg{min-height:22px;margin:12px 4px 0;color:var(--muted);font-size:12px}
-    .result{margin-top:30px;display:none}.result-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}.result h2{font-size:16px;margin:0}.download{border:1px solid var(--line);background:var(--panel);color:#fff;border-radius:10px;padding:9px 12px;text-decoration:none;font-size:12px}.compare{position:relative;overflow:hidden;border-radius:18px;border:1px solid var(--line);background:#090b0e;aspect-ratio:16/9;user-select:none}.compare img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#090b0e}.after-wrap{position:absolute;inset:0;clip-path:inset(0 0 0 50%)}.divider{position:absolute;top:0;bottom:0;left:50%;width:1px;background:#fff;box-shadow:0 0 0 1px rgba(0,0,0,.25)}.knob{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:36px;height:36px;border-radius:999px;background:#fff;color:#111;display:grid;place-items:center;font-size:16px;font-weight:900}.compare input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:ew-resize}.tag{position:absolute;top:12px;padding:6px 8px;border-radius:8px;background:rgba(0,0,0,.55);font-size:11px;backdrop-filter:blur(8px)}.tag.left{left:12px}.tag.right{right:12px}
-    @media(max-width:900px){.controls{grid-template-columns:1fr 1fr}}@media(max-width:620px){main{padding-top:30px}.controls{grid-template-columns:1fr}.brand h1{font-size:31px}header{align-items:flex-start;flex-direction:column}.drop{min-height:210px}}
+    :root{color-scheme:dark;--bg:#0a0c0f;--panel:#12161b;--panel2:#171c22;--line:#262d36;--text:#f4f6f8;--muted:#8e98a5;--ok:#56d58a;--bad:#ff7b7b}
+    *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}
+    main{width:min(1040px,calc(100% - 32px));margin:auto;padding:54px 0 90px}header{display:flex;justify-content:space-between;gap:24px;align-items:flex-end;margin-bottom:30px}.brand h1{margin:0;font-size:38px;letter-spacing:-1.5px}.brand p{margin:8px 0 0;color:var(--muted);font-size:13px;line-height:1.6}.status{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:12px}.dot{width:8px;height:8px;border-radius:99px;background:#6b7480}.dot.ok{background:var(--ok)}.dot.bad{background:var(--bad)}
+    .notice{margin-bottom:14px;padding:12px 14px;border:1px solid var(--line);background:#10141a;border-radius:12px;color:#aeb6c1;font-size:12px;line-height:1.6}.notice strong{color:#fff}
+    .drop{min-height:260px;border:1px dashed #3c4551;border-radius:20px;background:var(--panel);display:grid;place-items:center;text-align:center;padding:24px;cursor:pointer;transition:.2s}.drop:hover,.drop.drag{border-color:#778392;background:#151a20}.drop strong{font-size:18px}.drop span{display:block;margin-top:8px;color:var(--muted);font-size:12px}.drop img{display:none;max-width:100%;max-height:460px;border-radius:12px}
+    .controls{display:grid;grid-template-columns:1fr 1fr 1.25fr;gap:12px;margin-top:12px}.control{border:1px solid var(--line);background:var(--panel);border-radius:15px;padding:15px}.label{font-size:11px;color:var(--muted);margin-bottom:10px}.seg{display:flex;gap:6px}.seg button{flex:1;border:1px solid var(--line);background:var(--panel2);color:#b2bbc6;padding:10px 8px;border-radius:9px;cursor:pointer;font-size:12px}.seg button.active{background:#f3f5f7;color:#0a0c0f;border-color:#f3f5f7}.range{display:flex;align-items:center;gap:9px;font-size:11px;color:#aab2bd}.range input{width:100%;accent-color:#fff}.range output{width:30px;text-align:right;color:#fff}
+    .actions{display:grid;grid-template-columns:1fr 220px;gap:10px;margin-top:12px}.go,.bench{border:0;border-radius:13px;padding:15px 18px;font-weight:700;cursor:pointer}.go{background:#f3f5f7;color:#090b0e}.bench{background:#1b2129;color:#fff;border:1px solid #303844}.go:disabled,.bench:disabled{opacity:.4;cursor:not-allowed}.msg{min-height:22px;margin:10px 3px;color:var(--muted);font-size:12px;line-height:1.6}
+    .result,.benchmark{display:none;margin-top:28px}.result-head,.bench-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:11px}.result h2,.benchmark h2{font-size:15px;margin:0}.download{border:1px solid var(--line);background:var(--panel);color:#fff;border-radius:9px;padding:8px 11px;text-decoration:none;font-size:11px}
+    .compare{position:relative;overflow:hidden;border-radius:17px;border:1px solid var(--line);background:#080a0d;aspect-ratio:16/9;user-select:none}.compare img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#080a0d}.after-wrap{position:absolute;inset:0;clip-path:inset(0 0 0 50%)}.divider{position:absolute;top:0;bottom:0;left:50%;width:1px;background:#fff}.knob{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:34px;height:34px;border-radius:99px;background:#fff;color:#111;display:grid;place-items:center;font-weight:900}.compare input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:ew-resize}.tag{position:absolute;top:10px;padding:6px 8px;border-radius:8px;background:rgba(0,0,0,.56);font-size:10px}.tag.left{left:10px}.tag.right{right:10px}
+    .bench-note{color:var(--muted);font-size:11px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.card{border:1px solid var(--line);background:var(--panel);border-radius:14px;overflow:hidden}.card img{display:block;width:100%;aspect-ratio:16/10;object-fit:contain;background:#090b0e}.card div{padding:10px 12px}.card strong{display:block;font-size:12px}.card span{display:block;color:var(--muted);font-size:10px;margin-top:4px;line-height:1.5}
+    @media(max-width:780px){main{padding-top:28px}header{align-items:flex-start;flex-direction:column}.brand h1{font-size:31px}.controls{grid-template-columns:1fr}.actions{grid-template-columns:1fr}.grid{grid-template-columns:1fr}.drop{min-height:210px}}
   </style>
 </head>
 <body>
 <main>
   <header>
-    <div class="brand"><h1>GPT CLEANER</h1><p>先删掉 AI 垃圾高频，再决定要不要让生成模型补一点材质。</p></div>
-    <div class="status"><i id="dot" class="dot"></i><span id="health">检查本地引擎…</span></div>
+    <div class="brand"><h1>GPT CLEANER <small style="font-size:12px;color:#697380;letter-spacing:0">V0.3</small></h1><p>先洗掉 GPT 的错误细节，再用语义修复重新长回合理材质。<br>重点不是锐化，而是“干净 + 有细节 + 尽量不改原设计”。</p></div>
+    <div class="status"><i id="dot" class="dot"></i><span id="health">检查语义引擎…</span></div>
   </header>
+
+  <div id="notice" class="notice"><strong>V0.3：</strong>默认使用 SUPIR 语义精修。安全清理只作为不生成新细节的保守备用。当前阶段固定 1X 输出，先把质感调到接近研森，再开放 2X / 4X。</div>
 
   <label id="drop" class="drop">
     <input id="file" type="file" accept="image/png,image/jpeg,image/webp" hidden />
-    <div id="placeholder"><strong>拖一张 GPT 生图进来</strong><span>PNG / JPG / WEBP · 图片只在你的机器上处理</span></div>
+    <div id="placeholder"><strong>拖入一张 GPT 生图</strong><span>PNG / JPG / WEBP · 本地 Windows GPU 处理，不调用商业 AI API</span></div>
     <img id="preview" alt="preview" />
   </label>
 
   <section class="controls">
-    <div class="control"><div class="label">处理方式</div><div class="seg" id="mode"><button data-v="safe" class="active">安全清理</button><button data-v="refine">AI 重建</button></div><div id="modeHint" class="hint">默认。只洗高频，不让模型改脸、改发型和身体结构。</div></div>
-    <div class="control"><div class="label">GPT 味</div><div class="seg" id="preset"><button data-v="light">轻微</button><button data-v="standard" class="active">标准</button><button data-v="heavy">严重</button></div><div class="hint">控制假发丝、塑料高光、脏纹理的清理力度。</div></div>
-    <div class="control"><div class="label">结构保护</div><div class="range-row"><span style="font-size:12px">自由</span><input id="structure" type="range" min="0" max="100" value="94" /><span style="font-size:12px">严格</span><output id="structureOut">94</output></div><div class="hint">角色设定图建议 90–100。</div></div>
-    <div class="control"><div class="label">输出</div><div class="seg" id="scale"><button data-v="1" class="active">原尺寸</button><button data-v="2">2X</button><button data-v="4">4X</button></div><div class="hint">AI 重建始终先在 1X 清理，再安全放大，避免 8GB 显存爆掉。</div></div>
+    <div class="control"><div class="label">处理引擎</div><div class="seg" id="mode"><button data-v="semantic" class="active">语义精修</button><button data-v="safe">安全清理</button></div></div>
+    <div class="control"><div class="label">GPT 味 / 重建力度</div><div class="seg" id="preset"><button data-v="light">轻</button><button data-v="standard" class="active">标准</button><button data-v="heavy">强</button></div></div>
+    <div class="control"><div class="label">结构保护 · 主要保护轮廓/五官位置，不再把垃圾纹理一起锁死</div><div class="range"><span>自由</span><input id="structure" type="range" min="70" max="100" value="94" /><span>严格</span><output id="structureOut">94</output></div></div>
   </section>
 
-  <button id="go" class="go" disabled>开始清洗</button>
+  <div class="actions"><button id="go" class="go" disabled>开始语义清洗 · 1X</button><button id="bench" class="bench" disabled>生成四版对比</button></div>
   <div id="msg" class="msg"></div>
 
   <section id="result" class="result">
@@ -49,21 +52,29 @@
       <input id="compareRange" type="range" min="0" max="100" value="50" aria-label="before after compare" />
     </div>
   </section>
+
+  <section id="benchmark" class="benchmark">
+    <div class="bench-head"><div><h2>V0.3 四版 Benchmark</h2><div class="bench-note">一次跑两次 SUPIR，D 与 C 共用同一语义结果，只改变结构融合。</div></div></div>
+    <div class="grid">
+      <article class="card"><img id="benchA"><div><strong>A · Clean Base</strong><span>只看“洗脏”能力。它发软是正常的，不是最终成品。</span></div></article>
+      <article class="card"><img id="benchB"><div><strong>B · Semantic Low</strong><span>低强度语义重建，优先观察眼睛、头发和树脂材质有没有长回细节。</span></div></article>
+      <article class="card"><img id="benchC"><div><strong>C · Semantic Mid</strong><span>当前主候选，目标最接近研森的“干净但不糊”。</span></div></article>
+      <article class="card"><img id="benchD"><div><strong>D · Structure Safe</strong><span>与 C 同一语义结果，但更强地锁轮廓、五官位置和关节。</span></div></article>
+    </div>
+  </section>
 </main>
 <script>
-  const $ = s => document.querySelector(s); let selected=null, originalURL=null, resultURL=null;
-  let mode='safe', preset='standard', scale='1', comfyReady=false;
-  const drop=$('#drop'), file=$('#file'), preview=$('#preview'), placeholder=$('#placeholder'), go=$('#go'), msg=$('#msg');
-  function bindSeg(id,setter){document.querySelectorAll(`#${id} button`).forEach(b=>b.onclick=()=>{document.querySelectorAll(`#${id} button`).forEach(x=>x.classList.remove('active'));b.classList.add('active');setter(b.dataset.v)})}
-  bindSeg('preset',v=>preset=v); bindSeg('scale',v=>scale=v);
-  bindSeg('mode',v=>{mode=v;const h=$('#modeHint');if(v==='safe'){h.className='hint';h.textContent='默认。只洗高频，不让模型改脸、改发型和身体结构。'}else{h.className='hint warn';h.textContent=comfyReady?'实验模式。只借少量生成细节，原图低频结构会重新压回去。':'ComfyUI 尚未就绪，AI 重建暂不可用。'}});
-  $('#structure').oninput=e=>$('#structureOut').value=e.target.value;
-  function pick(f){if(!f)return; selected=f; if(originalURL)URL.revokeObjectURL(originalURL); originalURL=URL.createObjectURL(f); preview.src=originalURL; preview.style.display='block'; placeholder.style.display='none'; go.disabled=false; msg.textContent=`${f.name} · ${(f.size/1024/1024).toFixed(2)} MB`; $('#result').style.display='none'}
-  file.onchange=e=>pick(e.target.files[0]);
-  ['dragenter','dragover'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add('drag')}));['dragleave','drop'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove('drag')}));drop.addEventListener('drop',e=>pick(e.dataTransfer.files[0]));
-  async function health(){try{let r=await fetch('/api/health');let j=await r.json();comfyReady=!!j.comfy;if(j.comfy){$('#dot').className='dot ok';$('#health').textContent='安全清理 + AI 重建已就绪'}else{$('#dot').className='dot partial';$('#health').textContent='安全清理已就绪 · AI 重建未启动'}}catch{$('#dot').className='dot bad';$('#health').textContent='本地服务未就绪'}} health();
-  go.onclick=async()=>{if(!selected)return;if(mode==='refine'&&!comfyReady){msg.textContent='AI 重建引擎还没启动。先用「安全清理」，或重启 GPT Cleaner。';return}go.disabled=true;go.textContent='正在清洗…';msg.textContent=mode==='safe'?'正在压掉垃圾高频并保留结构边缘。':'正在清理高频，再只借少量生成细节，最后把原图结构压回去。';let fd=new FormData();fd.append('image',selected);fd.append('mode',mode);fd.append('preset',preset);fd.append('scale',scale);fd.append('structure',(Number($('#structure').value)/100).toFixed(2));try{let r=await fetch('/api/clean',{method:'POST',body:fd});if(!r.ok){let j=await r.json().catch(()=>({error:r.statusText}));throw new Error(j.error||r.statusText)}let blob=await r.blob();if(resultURL)URL.revokeObjectURL(resultURL);resultURL=URL.createObjectURL(blob);$('#before').src=originalURL;$('#after').src=resultURL;$('#download').href=resultURL;$('#download').download=(selected.name.replace(/\.[^.]+$/,'')||'image')+'_cleaned.png';$('#result').style.display='block';msg.textContent=mode==='safe'?'完成。重点看假发丝、皮肤脏纹和塑料高光是否变干净，轮廓应基本不动。':'完成。若五官或轮廓仍有变化，请改用安全清理或把结构保护拉到 98。';$('#result').scrollIntoView({behavior:'smooth',block:'start'})}catch(e){msg.textContent='处理失败：'+e.message}finally{go.disabled=false;go.textContent='开始清洗'}};
-  $('#compareRange').oninput=e=>{let v=e.target.value;$('#afterWrap').style.clipPath=`inset(0 0 0 ${v}%)`;$('#divider').style.left=v+'%';$('#knob').style.left=v+'%'};
+const $=s=>document.querySelector(s);let selected=null,originalURL=null,resultURL=null;let mode='semantic',preset='standard';
+const drop=$('#drop'),file=$('#file'),preview=$('#preview'),placeholder=$('#placeholder'),go=$('#go'),bench=$('#bench'),msg=$('#msg');
+function bindSeg(id,setter){document.querySelectorAll(`#${id} button`).forEach(b=>b.onclick=()=>{document.querySelectorAll(`#${id} button`).forEach(x=>x.classList.remove('active'));b.classList.add('active');setter(b.dataset.v);if(id==='mode')go.textContent=b.dataset.v==='semantic'?'开始语义清洗 · 1X':'开始安全清理 · 1X'})}
+bindSeg('mode',v=>mode=v);bindSeg('preset',v=>preset=v);$('#structure').oninput=e=>$('#structureOut').value=e.target.value;
+function pick(f){if(!f)return;selected=f;if(originalURL)URL.revokeObjectURL(originalURL);originalURL=URL.createObjectURL(f);preview.src=originalURL;preview.style.display='block';placeholder.style.display='none';go.disabled=false;bench.disabled=false;msg.textContent=`${f.name} · ${(f.size/1024/1024).toFixed(2)} MB`;$('#result').style.display='none';$('#benchmark').style.display='none'}
+file.onchange=e=>pick(e.target.files[0]);['dragenter','dragover'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add('drag')}));['dragleave','drop'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove('drag')}));drop.addEventListener('drop',e=>pick(e.dataTransfer.files[0]));
+async function health(){try{let r=await fetch('/api/health');let j=await r.json();let ok=j.supir;$('#dot').className='dot '+(ok?'ok':'bad');$('#health').textContent=ok?'SUPIR 语义引擎已就绪':(j.comfy?'ComfyUI 已启动，SUPIR 未就绪':'ComfyUI 未启动');if(!ok)$('#notice').innerHTML='<strong>语义引擎未就绪：</strong>请先运行 UPDATE_GPT_CLEANER.bat 完成 V0.3 模型/节点安装，再重启。安全清理仍可使用。'}catch{$('#dot').className='dot bad';$('#health').textContent='本地服务未就绪'}}health();
+function form(){let fd=new FormData();fd.append('image',selected);fd.append('mode',mode);fd.append('preset',preset);fd.append('structure',(Number($('#structure').value)/100).toFixed(3));return fd}
+go.onclick=async()=>{if(!selected)return;go.disabled=true;bench.disabled=true;let semantic=mode==='semantic';go.textContent=semantic?'正在语义重建…':'正在安全清理…';msg.textContent=semantic?'正在：控制性降质 → SUPIR 重新长细节 → 多尺度结构融合。8GB 显存首次可能需要几分钟。':'仅做保守频率清理，不会重新生成细节。';try{let r=await fetch('/api/clean',{method:'POST',body:form()});if(!r.ok){let j=await r.json().catch(()=>({error:r.statusText}));throw new Error(j.error||r.statusText)}let blob=await r.blob();if(resultURL)URL.revokeObjectURL(resultURL);resultURL=URL.createObjectURL(blob);$('#before').src=originalURL;$('#after').src=resultURL;$('#download').href=resultURL;$('#download').download=(selected.name.replace(/\.[^.]+$/,'')||'image')+'_v03.png';$('#result').style.display='block';msg.textContent='完成。重点看：眼睛玻璃感、头发块面内部细节、皮肤树脂质感，以及五官/关节有没有漂移。';$('#result').scrollIntoView({behavior:'smooth',block:'start'})}catch(e){msg.textContent='处理失败：'+e.message}finally{go.disabled=false;bench.disabled=false;go.textContent=mode==='semantic'?'开始语义清洗 · 1X':'开始安全清理 · 1X'}};
+bench.onclick=async()=>{if(!selected)return;go.disabled=true;bench.disabled=true;bench.textContent='正在生成四版…';msg.textContent='Benchmark 会执行两次 SUPIR：A 是洗脏底图，B 低语义，C 中语义，D 用 C 的结果做高结构保护融合。请耐心等。';let fd=new FormData();fd.append('image',selected);try{let r=await fetch('/api/benchmark',{method:'POST',body:fd});let j=await r.json();if(!r.ok)throw new Error(j.error||r.statusText);$('#benchA').src=j.images['A_clean-base'];$('#benchB').src=j.images['B_semantic-low'];$('#benchC').src=j.images['C_semantic-mid'];$('#benchD').src=j.images['D_structure-safe'];$('#benchmark').style.display='block';msg.textContent='四版完成。把 B/C/D 与研森结果一起比较，优先选“细节回来但没有改脸”的那张。调试目录：'+j.debug_dir;$('#benchmark').scrollIntoView({behavior:'smooth',block:'start'})}catch(e){msg.textContent='Benchmark 失败：'+e.message}finally{go.disabled=false;bench.disabled=false;bench.textContent='生成四版对比'}};
+$('#compareRange').oninput=e=>{let v=e.target.value;$('#afterWrap').style.clipPath=`inset(0 0 0 ${v}%)`;$('#divider').style.left=v+'%';$('#knob').style.left=v+'%'};
 </script>
 </body>
 </html>
