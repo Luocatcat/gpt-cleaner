@@ -2,47 +2,61 @@
   "comfy_url": "http://127.0.0.1:8188",
   "web_host": "0.0.0.0",
   "web_port": 8787,
-  "model": "real-world_ccsr-fp16.safetensors",
-  "tile_size": 256,
-  "tile_stride": 128,
-  "vae_tile_encode": 512,
-  "vae_tile_decode": 512,
-  "sampling_method": "ccsr_tiled_vae_gaussian_weights",
-  "color_fix": "wavelet",
-  "default_mode": "safe",
+  "default_mode": "semantic",
+  "supir": {
+    "model": "SUPIR-v0Q_fp16.safetensors",
+    "sdxl_model": "sd_xl_base_1.0.safetensors",
+    "seed": 123,
+    "restoration_scale": -1.0,
+    "color_fix": "Wavelet",
+    "keep_model_loaded": false,
+    "vae_tile_pixels": 512,
+    "vae_tile_latent": 64,
+    "sampler_tile_size": 512,
+    "sampler_tile_stride": 256,
+    "diffusion_dtype": "fp16",
+    "encoder_dtype": "fp32",
+    "fp8_unet": true,
+    "sampler": "RestoreEDMSampler",
+    "positive_prompt": "high quality clean coherent image, preserved composition and identity, clean material shading, coherent surfaces, controlled fine detail, natural texture appropriate to the subject, clean edges, subtle highlights",
+    "negative_prompt": "oversharpened, noisy, gritty, random microtexture, fake hair strands, tangled strands, plastic glare, dirty texture, repeated patterns, ringing, halos, waxy blur, smeared detail, deformed anatomy, altered identity, extra objects, text corruption"
+  },
+  "ccsr": {
+    "model": "real-world_ccsr-fp16.safetensors",
+    "tile_size": 256,
+    "tile_stride": 128,
+    "vae_tile_encode": 512,
+    "vae_tile_decode": 512,
+    "sampling_method": "ccsr_tiled_vae_gaussian_weights",
+    "color_fix": "wavelet"
+  },
   "presets": {
     "light": {
+      "preclean_strength": 0.18,
+      "bilateral_d": 5,
+      "bilateral_sigma_color": 14,
+      "bilateral_sigma_space": 14,
+      "steps": 8,
+      "t_max": 0.48,
+      "t_min": 0.38
+    },
+    "standard": {
       "preclean_strength": 0.24,
       "bilateral_d": 5,
       "bilateral_sigma_color": 18,
       "bilateral_sigma_space": 18,
-      "edge_preserve": 0.92,
-      "steps": 8,
-      "t_max": 0.48,
-      "t_min": 0.38,
-      "gen_detail_mix": 0.12
-    },
-    "standard": {
-      "preclean_strength": 0.36,
-      "bilateral_d": 7,
-      "bilateral_sigma_color": 26,
-      "bilateral_sigma_space": 26,
-      "edge_preserve": 0.90,
       "steps": 12,
       "t_max": 0.54,
-      "t_min": 0.40,
-      "gen_detail_mix": 0.20
+      "t_min": 0.40
     },
     "heavy": {
-      "preclean_strength": 0.50,
-      "bilateral_d": 9,
-      "bilateral_sigma_color": 38,
-      "bilateral_sigma_space": 38,
-      "edge_preserve": 0.88,
+      "preclean_strength": 0.32,
+      "bilateral_d": 7,
+      "bilateral_sigma_color": 24,
+      "bilateral_sigma_space": 24,
       "steps": 16,
       "t_max": 0.60,
-      "t_min": 0.38,
-      "gen_detail_mix": 0.28
+      "t_min": 0.38
     }
   }
 }
