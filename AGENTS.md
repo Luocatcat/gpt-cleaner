@@ -1,186 +1,172 @@
-# GPT Cleaner · Agent Installation Contract
+# GPT Cleaner V0.3 · Agent Installation Contract
 
-This repository is designed to be installed and maintained by an agent on a Windows NVIDIA machine with minimal user involvement.
+This repository is installed and maintained by an agent on a Windows NVIDIA machine. Diagnose safe in-scope failures instead of asking the user to relay routine commands.
 
 ## Mission
 
-Install and launch GPT Cleaner so the user can open a minimal web page, upload a GPT-generated image, remove high-frequency AI artifacts, compare before/after, and save the result.
+Install, upgrade, launch, and verify GPT Cleaner so the default route performs local SUPIR semantic restoration at exact 1x. Keep deterministic safe cleanup and the old CCSR node available as fallbacks.
 
-Primary target machine:
+Primary target:
 
-- Windows 64-bit
-- Ryzen 9 7900X
-- 32 GB RAM
-- NVIDIA RTX 5060 8 GB
+- Windows 64-bit;
+- Ryzen 9 7900X;
+- 32 GB RAM;
+- NVIDIA RTX 5060 8 GB;
+- preferred path `D:\gpt-cleaner`.
 
 ## Product behavior
 
-V0.2 has two routes:
+V0.3 has two user-facing modes:
 
-- **safe cleanup** (default): deterministic high-frequency suppression with edge protection. This route must work even if ComfyUI is unavailable.
-- **AI refine** (experimental): preclean → CCSR → original low-frequency structure reinjection. Do not return raw CCSR output directly.
+- **semantic restoration** (default): controlled degradation → Core SUPIR → multi-scale Laplacian fusion → exact original dimensions;
+- **safe cleanup**: deterministic luminance micro-texture suppression, available without ComfyUI.
 
-For character sheets, default to safe cleanup and structure protection >= 0.94.
+Semantic fallback order is fixed:
+
+```text
+SUPIR → legacy CCSR → safe cleanup
+```
+
+The HTTP response and web UI must disclose the actual engine. Never report a CCSR or safe fallback as SUPIR success.
+
+The old CCSR wrapper is `kijai/ComfyUI-CCSR`, not official CCSR-v2. Do not rename or misrepresent it.
 
 ## Non-negotiable rules
 
-1. Do not upload user images to any external AI service.
-2. Do not expose ComfyUI port 8188 publicly. It must remain bound to `127.0.0.1`.
-3. Do not modify or delete an existing user ComfyUI installation.
-4. Do not install packages into the user's global Python environment. Use `runtime/venv` only.
-5. Do not delete user files outside this repository.
-6. If a command fails, diagnose and repair before reporting failure.
-7. Only report full installation success after `doctor.ps1` passes and the local web UI responds on port 8787.
-8. Safe cleanup availability is still useful if the optional ComfyUI refine engine fails. Report that distinction accurately.
-9. Prefer reversible changes. Runtime files must live under `runtime/`.
-10. The current ComfyUI route uses Kijai's CCSR wrapper. Do not claim it is official CCSR-v2.
+1. Do not upload user images to an external inference service.
+2. Do not expose ComfyUI port 8188 beyond `127.0.0.1`.
+3. Do not modify or delete another user ComfyUI installation.
+4. Use only this repository's `runtime\venv`; do not install into global Python.
+5. Do not delete files outside this repository.
+6. Preserve `runtime\`, models, logs, and `config\local.json` during upgrade.
+7. Diagnose dependency, PATH, CUDA, download, and startup failures before reporting them.
+8. Safe cleanup remains useful when optional generative engines fail. Report full, partial, and failed status accurately.
+9. V0.3 semantic mode is exact 1x only. Do not silently honor 2x or 4x requests.
+10. Do not claim visual-quality success before the modern-witch/BJD A/B is reviewed.
 
-## First-run sequence
+## First installation
 
 From the repository root:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\install.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
 ```
 
-The installer should:
+The installer must:
 
-1. verify NVIDIA GPU visibility using `nvidia-smi`;
-2. record GPU name and VRAM;
-3. ensure Git and a real Python 3.12 interpreter are available;
-4. create `runtime/venv`;
-5. install PyTorch CUDA wheels into that venv;
-6. obtain ComfyUI under `runtime/ComfyUI`;
+1. query NVIDIA name and VRAM without the PowerShell 5.1 pipeline race;
+2. find or install Git;
+3. find a real Python 3.12 interpreter, rejecting Windows Store stubs;
+4. create `runtime\venv`;
+5. install CUDA PyTorch inside that venv;
+6. obtain a dedicated `runtime\ComfyUI` with codeload fallback;
 7. install ComfyUI requirements;
-8. obtain `kijai/ComfyUI-CCSR` under ComfyUI `custom_nodes`;
-9. install node requirements inside the venv;
-10. install GPT Cleaner app requirements;
-11. patch the CCSR node import path for current ComfyUI behavior;
-12. download the fp16 CCSR model under `runtime/ComfyUI/models/CCSR`;
-13. write a VRAM-aware config to `config/local.json`;
-14. run `doctor.ps1`;
-15. launch via `start.ps1`;
-16. verify `http://127.0.0.1:8787/api/health` responds.
+8. install the legacy CCSR node and its compatibility patch;
+9. install GPT Cleaner app requirements;
+10. download the old CCSR checkpoint;
+11. download the Juggernaut XL Lightning checkpoint and SUPIR v0Q fp16 model patch;
+12. write VRAM-aware CCSR settings to `config\local.json`;
+13. run `doctor.ps1`;
+14. launch locally and verify the web health endpoint.
 
-## Known first-run issues already handled by repository scripts
+## Incremental V0.2 upgrade
 
-Do not reintroduce these bugs:
+V0.2 may have been installed from a zip and may have no `.git`. Run the existing updater once to fetch V0.3 source, then run the newly fetched updater a second time to perform semantic model installation:
 
-### PowerShell `nvidia-smi` pipeline race
+```powershell
+Set-Location D:\gpt-cleaner
+powershell -NoProfile -ExecutionPolicy Bypass -File .\update.ps1 -NoStart
+powershell -NoProfile -ExecutionPolicy Bypass -File .\update.ps1 -NoStart -SkipDoctor
+powershell -NoProfile -ExecutionPolicy Bypass -File .\doctor.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\start.ps1
+```
 
-Do not pipe `nvidia-smi` directly into `Select-Object -First 1` while relying on `$LASTEXITCODE`. PowerShell 5.1 can terminate the native process early and produce an invalid exit code. Collect the complete native output first, store `$LASTEXITCODE`, then select the first non-empty line.
+The V0.3 updater must not reinstall Python, PyTorch, the old CCSR model, or the complete runtime. If Core `SUPIRApply` is missing, it updates only this repository's dedicated ComfyUI core while preserving `.git`, `models`, `custom_nodes`, `input`, `output`, `temp`, and `user`.
+
+## Required models
+
+```text
+runtime\ComfyUI\models\checkpoints\juggernautXL_v9Rdphoto2Lightning.safetensors
+runtime\ComfyUI\models\model_patches\SUPIR-v0Q_fp16.safetensors
+runtime\ComfyUI\models\CCSR\real-world_ccsr-fp16.safetensors
+```
+
+Model sources are recorded in `scripts\update_manifest.json`. Try Hugging Face directly, then `HF_ENDPOINT=https://hf-mirror.com`. This mirror transfers model files; it is not an inference service.
+
+## Real Windows issues already fixed
+
+Do not reintroduce these failures:
+
+### `nvidia-smi` PowerShell 5.1 race
+
+Never pipe `nvidia-smi` directly into `Select-Object -First 1` while relying on `$LASTEXITCODE`. Collect complete native output, save the exit code, then select the first line.
 
 ### Windows Store Python stub
 
-`Get-Command python` may resolve to the Microsoft Store launcher instead of a real interpreter. Never call `.Trim()` on unchecked command output. Validate:
+`Get-Command python` can return a launcher instead of Python. Validate exit code, non-empty output, executable path, and Python 3.12 before using it. Never call `.Trim()` on unchecked output.
 
-- process exit code is 0;
-- output is non-empty;
-- the resolved executable exists;
-- `sys.version_info` reports 3.12.
+### GitHub instability
 
-### GitHub direct clone instability
+After a failed Git clone, use `codeload.github.com` zip once. Do not retry an unstable clone indefinitely.
 
-If `git clone` fails because of reset/timeout/pack errors, use the repository codeload zip fallback. Do not repeatedly hammer clone indefinitely.
+### Hugging Face timeout
 
-### Hugging Face direct timeout
+Retry a failed model download through `https://hf-mirror.com`. Keep already completed model files.
 
-Try normal Hugging Face first. If the CCSR checkpoint cannot be downloaded, retry through `HF_ENDPOINT=https://hf-mirror.com`. This is a file mirror, not an AI inference service.
+### `huggingface_hub` mismatch
 
-### `huggingface_hub` / transformers mismatch
+Keep `huggingface_hub>=1.5,<2`; do not downgrade it below current ComfyUI transformers requirements.
 
-Do not downgrade `huggingface_hub` below the version required by current ComfyUI transformers. GPT Cleaner pins it to `>=1.5,<2`.
+### Current ComfyUI CCSR import path
 
-### Current ComfyUI custom node import path
+Keep the `GPT_CLEANER_SYSPATH_COMPAT` block in `ComfyUI-CCSR\__init__.py`. If `No module named 'ComfyUI-CCSR'` returns, reapply the patch, restart ComfyUI, and rerun `--ccsr`.
 
-Recent ComfyUI versions do not guarantee `custom_nodes/` is present on `sys.path`. The installer prepends a `GPT_CLEANER_SYSPATH_COMPAT` block to `ComfyUI-CCSR/__init__.py`. Preserve that patch. If execution reports `No module named 'ComfyUI-CCSR'`, confirm the patch exists, restart ComfyUI, then rerun the refine smoke test.
+## 8 GB VRAM policy
 
-## VRAM policy
+- launch ComfyUI with `--lowvram`;
+- keep semantic working long edge at 768–1024 px;
+- keep semantic output at 1x;
+- use 512 px tiled VAE decode with 64 px overlap;
+- do not install the optional Qwen caption model;
+- keep legacy CCSR at 256 tile / 128 stride for approximately 8 GB.
 
-For approximately 8 GB VRAM, default to conservative settings:
+For CCSR CUDA OOM only, reduce tile/stride to 192/96, then 128/64, restarting ComfyUI after each change. Do not silently change final output dimensions.
 
-- ComfyUI `--lowvram`
-- CCSR tiled sampling
-- tile size: 256
-- tile stride: 128
-- VAE encode/decode tile: 512
-- keep model loaded: false
-- CCSR generation at 1x only; final 2x/4x resize occurs after structure reinjection
-
-If CUDA OOM occurs:
-
-1. reduce tile size from 256 to 192;
-2. reduce tile stride from 128 to 96;
-3. if still failing, reduce tile size to 128 and stride to 64;
-4. restart ComfyUI after changing preset;
-5. retry once.
-
-Never silently reduce the requested final output dimensions.
-
-## Start / update
+## Start and verification
 
 Start:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\start.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\start.ps1
 ```
 
-or double-click `START_GPT_CLEANER.bat`.
-
-Update code while preserving already-downloaded models and runtime:
+Verify:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\update.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\doctor.ps1
+.\runtime\venv\Scripts\python.exe .\scripts\smoke_test.py --safe
+.\runtime\venv\Scripts\python.exe .\scripts\smoke_test.py --semantic
+.\runtime\venv\Scripts\python.exe .\scripts\smoke_test.py --ccsr
 ```
 
-or double-click `UPDATE_GPT_CLEANER.bat`.
+Interpret results:
 
-The updater intentionally uses codeload zip so it also works on installations originally obtained without `.git` metadata.
+- `PASS semantic engine=supir`: full semantic path ran;
+- `PARTIAL semantic used ccsr`: SUPIR failed or was unavailable, CCSR worked;
+- `PARTIAL semantic used safe`: both generative engines failed, safe worked;
+- `FAIL`: requested route or exact dimensions failed.
 
-## Smoke tests
+Only report full V0.3 readiness after doctor, safe smoke, and semantic smoke pass on Windows. Report CCSR separately. A passing synthetic smoke test does not prove the target image meets visual quality.
 
-Safe deterministic path:
+## Visual acceptance
 
-```powershell
-.\runtime\venv\Scripts\python.exe .\scripts\smoke_test.py
-```
+Run the modern-witch/BJD source at semantic, standard, structure protection 94–98, exact 1x. Compare against the source and Yansen 1K reference for:
 
-Optional AI refine path:
+- fewer fake hair strands and repeated micro-patterns;
+- cleaner skin, resin, glass-eye, and joint materials;
+- better medium-scale shading rather than simple blur;
+- no visible tile seams;
+- stable front/side/back silhouettes and joint positions;
+- minimal eye, nose, mouth, and face-shape movement.
 
-```powershell
-.\runtime\venv\Scripts\python.exe .\scripts\smoke_test.py --refine
-```
-
-The second command is the authoritative test for the ComfyUI/CCSR node execution path.
-
-## Start / stop behavior
-
-The launcher starts:
-
-- optional ComfyUI AI-refine engine on `127.0.0.1:8188`;
-- GPT Cleaner web app on `0.0.0.0:8787`;
-- browser on `http://127.0.0.1:8787`.
-
-If ComfyUI fails to start, do not abort the whole product. Start the web app and clearly report that safe cleanup is available while AI refine is unavailable.
-
-For remote access, use Tailscale or a trusted LAN and expose only port 8787. Never expose 8188.
-
-## Acceptance checklist
-
-Before telling the user it is ready, verify:
-
-- `doctor.ps1` exits with code 0 for the installed runtime;
-- `torch.cuda.is_available()` is true when AI refine is expected;
-- GPU name is correct;
-- GPT Cleaner `/api/health` responds;
-- safe smoke test passes;
-- web page loads;
-- no external AI API key is required.
-
-For **full AI-refine ready** status also verify:
-
-- CCSR fp16 model exists;
-- ComfyUI `/system_stats` responds locally;
-- `scripts/smoke_test.py --refine` passes.
-
-After those pass, tell the user the exact local URL and, if applicable, the Tailscale/LAN URL.
+If the real source and comparison reference are unavailable, report visual acceptance as `partial`.

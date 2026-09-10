@@ -1,17 +1,25 @@
 param(
-    [switch]$NoStart
+    [switch]$NoStart,
+    [switch]$SkipDoctor
 )
 
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $Runtime = Join-Path $Root 'runtime'
-$LocalConfig = Join-Path $Root 'config\local.json'
+$Comfy = Join-Path $Runtime 'ComfyUI'
+$Vpy = Join-Path $Runtime 'venv\Scripts\python.exe'
 $TempRoot = Join-Path $env:TEMP ("gpt-cleaner-update-" + [guid]::NewGuid().ToString('N'))
 $Zip = "$TempRoot.zip"
+$Helpers = Join-Path $Root 'scripts\update_helpers.ps1'
 
 function Step($Text) { Write-Host "`n==> $Text" -ForegroundColor Cyan }
 function Die($Text) { Write-Host "ERROR: $Text" -ForegroundColor Red; exit 1 }
+
+if (-not (Test-Path $Helpers)) {
+    Die 'V0.3 update helpers are missing. Run the existing updater once to fetch the latest source, then run update.ps1 again.'
+}
+. $Helpers
 
 try {
     Step 'Downloading latest GPT Cleaner source'
@@ -21,59 +29,55 @@ try {
     $Source = Get-ChildItem $TempRoot -Directory | Select-Object -First 1
     if (-not $Source) { Die 'Update archive contained no project directory.' }
 
-    Step 'Updating code while preserving runtime and local GPU config'
-    $preservedConfig = $null
-    if (Test-Path $LocalConfig) { $preservedConfig = Get-Content $LocalConfig -Raw }
+    $sourceManifestPath = Join-Path $Source.FullName 'scripts\update_manifest.json'
+    if (-not (Test-Path $sourceManifestPath)) { Die 'Latest source has no update manifest.' }
+    $Manifest = Get-Content $sourceManifestPath -Raw | ConvertFrom-Json
 
-    $items = @(
-        'README.md','AGENTS.md','WINDOWS_AGENT_PROMPT.md','.gitignore',
-        'install.ps1','doctor.ps1','start.ps1','update.ps1','START_GPT_CLEANER.bat',
-        'app','web','scripts','config'
-    )
-    foreach ($item in $items) {
-        $src = Join-Path $Source.FullName $item
-        $dst = Join-Path $Root $item
-        if (-not (Test-Path $src)) { continue }
-        if (Test-Path $dst) { Remove-Item $dst -Recurse -Force }
-        Copy-Item $src $dst -Recurse -Force
+    Step 'Stopping this installation runtime before in-place update'
+    Stop-GptCleanerRuntime -Root $Root
+
+    Step 'Updating source while preserving runtime and local config bytes'
+    Copy-GptCleanerSource -Source $Source.FullName -Target $Root -Manifest $Manifest
+
+    if (-not (Test-Path $Vpy)) {
+        Die 'Existing runtime Python is missing. Run install.ps1 instead of deleting or rebuilding runtime manually.'
+    }
+    if (-not (Test-Path $Comfy)) {
+        Die 'Existing runtime ComfyUI is missing. Run install.ps1 instead of deleting or rebuilding runtime manually.'
     }
 
-    if ($preservedConfig) {
-        New-Item -ItemType Directory -Force -Path (Split-Path -Parent $LocalConfig) | Out-Null
-        Set-Content -Path $LocalConfig -Value $preservedConfig -Encoding UTF8
-    }
+    Step 'Refreshing lightweight GPT Cleaner dependencies'
+    & $Vpy -m pip install --timeout 180 --retries 8 -r (Join-Path $Root 'app\requirements.txt')
+    if ($LASTEXITCODE -ne 0) { Die 'GPT Cleaner dependency refresh failed.' }
 
-    Step 'Refreshing lightweight Python dependencies and compatibility patches'
-    $Vpy = Join-Path $Runtime 'venv\Scripts\python.exe'
-    if (Test-Path $Vpy) {
-        & $Vpy -m pip install --timeout 180 --retries 8 -r (Join-Path $Root 'app\requirements.txt')
-        if ($LASTEXITCODE -ne 0) { Die 'Dependency refresh failed.' }
-    } else {
-        Write-Host 'Runtime not installed yet; install.ps1 will create it later.' -ForegroundColor Yellow
-    }
-
-    $Node = Join-Path $Runtime 'ComfyUI\custom_nodes\ComfyUI-CCSR'
-    $nodeInit = Join-Path $Node '__init__.py'
-    if (Test-Path $nodeInit) {
-        $initText = Get-Content $nodeInit -Raw
-        $marker = '# GPT_CLEANER_SYSPATH_COMPAT'
-        if ($initText -notmatch [regex]::Escape($marker)) {
-            $compat = @"
-$marker
-import os as _gc_os, sys as _gc_sys
-_gc_custom_nodes = _gc_os.path.dirname(_gc_os.path.dirname(_gc_os.path.abspath(__file__)))
-if _gc_custom_nodes not in _gc_sys.path:
-    _gc_sys.path.insert(0, _gc_custom_nodes)
-
-"@
-            Set-Content -Path $nodeInit -Value ($compat + $initText) -Encoding UTF8
+    if (-not (Test-GptCleanerComfySupirCore -Comfy $Comfy)) {
+        Step 'Updating dedicated ComfyUI core for native SUPIR support'
+        Update-GptCleanerComfyCore -Comfy $Comfy -Manifest $Manifest
+        & $Vpy -m pip install --timeout 180 --retries 8 -r (Join-Path $Comfy 'requirements.txt')
+        if ($LASTEXITCODE -ne 0) { Die 'ComfyUI dependency refresh failed.' }
+        if (-not (Test-GptCleanerComfySupirCore -Comfy $Comfy)) {
+            Die 'ComfyUI update completed but SUPIR Core nodes are still missing.'
         }
+    } else {
+        Write-Host 'ComfyUI Core SUPIR support already present.' -ForegroundColor Green
     }
 
-    Write-Host "`nGPT Cleaner source updated. Existing models/runtime were preserved." -ForegroundColor Green
+    Step 'Preserving legacy CCSR fallback compatibility'
+    Set-GptCleanerCcsrCompat -Comfy $Comfy
+
+    Step 'Downloading only missing semantic restoration models'
+    Install-GptCleanerSemanticModels -Python $Vpy -Comfy $Comfy -Manifest $Manifest
+
+    if (-not $SkipDoctor) {
+        Step 'Running V0.3 doctor'
+        & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $Root 'doctor.ps1')
+        if ($LASTEXITCODE -ne 0) { Die 'Doctor found a critical base-runtime problem.' }
+    }
+
+    Write-Host "`nGPT Cleaner V0.3 source and semantic models updated. Existing runtime, CCSR model, logs, and local config were preserved." -ForegroundColor Green
     if (-not $NoStart) {
         Step 'Launching updated GPT Cleaner'
-        & powershell -ExecutionPolicy Bypass -File (Join-Path $Root 'start.ps1')
+        & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $Root 'start.ps1')
     }
 } finally {
     Remove-Item $Zip -Force -ErrorAction SilentlyContinue

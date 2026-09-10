@@ -9,9 +9,14 @@ $Runtime = Join-Path $Root 'runtime'
 $Comfy = Join-Path $Runtime 'ComfyUI'
 $Venv = Join-Path $Runtime 'venv'
 $ConfigDir = Join-Path $Root 'config'
+$Helpers = Join-Path $Root 'scripts\update_helpers.ps1'
 
 function Step($Text) { Write-Host "`n==> $Text" -ForegroundColor Cyan }
 function Die($Text) { Write-Host "ERROR: $Text" -ForegroundColor Red; exit 1 }
+
+if (-not (Test-Path $Helpers)) { Die "Update helpers missing: $Helpers" }
+. $Helpers
+$UpdateManifest = Get-GptCleanerUpdateManifest -Root $Root
 
 function Refresh-Path {
     $machine = [Environment]::GetEnvironmentVariable('Path','Machine')
@@ -208,18 +213,25 @@ if (-not (Test-Path $ModelPath)) {
     if ($LASTEXITCODE -ne 0 -or -not (Test-Path $ModelPath)) { Die 'CCSR model download failed on both direct and mirror routes.' }
 }
 
+Step 'Downloading semantic restoration models'
+Install-GptCleanerSemanticModels -Python $Vpy -Comfy $Comfy -Manifest $UpdateManifest
+
 Step 'Writing VRAM-aware local config'
 $defaultConfig = Join-Path $ConfigDir 'default.json'
 $localConfig = Join-Path $ConfigDir 'local.json'
 $config = Get-Content $defaultConfig -Raw | ConvertFrom-Json
 if ($vramMB -lt 7500) {
     $config.tile_size = 192; $config.tile_stride = 96
+    $config.ccsr.tile_size = 192; $config.ccsr.tile_stride = 96
 } elseif ($vramMB -lt 10500) {
     $config.tile_size = 256; $config.tile_stride = 128
+    $config.ccsr.tile_size = 256; $config.ccsr.tile_stride = 128
 } elseif ($vramMB -lt 15000) {
     $config.tile_size = 384; $config.tile_stride = 192
+    $config.ccsr.tile_size = 384; $config.ccsr.tile_stride = 192
 } else {
     $config.tile_size = 512; $config.tile_stride = 256
+    $config.ccsr.tile_size = 512; $config.ccsr.tile_stride = 256
 }
 $config | ConvertTo-Json -Depth 20 | Set-Content -Path $localConfig -Encoding UTF8
 Write-Host "Preset: tile=$($config.tile_size), stride=$($config.tile_stride)" -ForegroundColor Green

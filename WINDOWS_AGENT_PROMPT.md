@@ -1,63 +1,68 @@
-# 给 Windows 智能体的指令
+# 给 Windows 豆包 / 电脑智能体的指令
 
-## A. 第一次安装
+## A. 从 V0.2 增量升级到 V0.3
 
-把下面整段连同仓库链接交给 Windows 上的 Codex / 豆包 / 电脑智能体即可：
+把下面整段交给 Windows 豆包：
 
 ```text
-请在这台 Windows NVIDIA 电脑上安装并启动 GPT Cleaner：
+请把 D:\gpt-cleaner 从 V0.2 增量升级到 GitHub 最新 V0.3：
+https://github.com/Luocatcat/gpt-cleaner
+
+先完整阅读仓库最新 AGENTS.md，再执行下面命令：
+
+Set-Location D:\gpt-cleaner
+powershell -NoProfile -ExecutionPolicy Bypass -File .\update.ps1 -NoStart
+powershell -NoProfile -ExecutionPolicy Bypass -File .\update.ps1 -NoStart -SkipDoctor
+powershell -NoProfile -ExecutionPolicy Bypass -File .\doctor.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\start.ps1
+.\runtime\venv\Scripts\python.exe .\scripts\smoke_test.py --safe
+.\runtime\venv\Scripts\python.exe .\scripts\smoke_test.py --semantic
+.\runtime\venv\Scripts\python.exe .\scripts\smoke_test.py --ccsr
+
+必须遵守：
+1. 连续运行两次 update.ps1。第一次让旧 V0.2 updater 取得 V0.3 脚本；第二次才执行 V0.3 SUPIR 增量安装。
+2. 保留 D:\gpt-cleaner\runtime 下现有 venv、PyTorch、ComfyUI、CCSR 模型、其他模型、日志和输出，不删除重装。
+3. 保留 config\local.json 原文件和显存设置。
+4. 只补下载缺失的 juggernautXL_v9Rdphoto2Lightning.safetensors 与 SUPIR-v0Q_fp16.safetensors。不要下载 Qwen 自动描述模型。
+5. 如果 ComfyUI Core 缺少 SUPIRApply，只更新 D:\gpt-cleaner\runtime\ComfyUI 的核心代码；保留 models、custom_nodes、input、output、temp、user 和 .git。
+6. 保留旧 ComfyUI-CCSR 和 GPT_CLEANER_SYSPATH_COMPAT，作为第二级回退。
+7. 不要改全局 Python，不要重装 PyTorch，不要操作用户其他 ComfyUI。
+8. ComfyUI 8188 只能监听 127.0.0.1。
+9. doctor 输出 PARTIAL 时继续看具体缺项，不要把 safe 可用说成全部失败，也不要把回退结果说成 SUPIR 成功。
+10. 最后只汇报：版本、GPU/显存、doctor、safe smoke、semantic smoke 实际引擎、CCSR smoke、网页地址、仍缺什么。
+```
+
+升级会新增约 9.77 GB 模型文件。开始前建议 `D:` 至少有 12 GB 可用空间。
+
+## B. 第一次安装 V0.3
+
+```text
+请在这台 Windows NVIDIA 电脑上安装 GPT Cleaner V0.3：
 https://github.com/Luocatcat/gpt-cleaner
 
 要求：
-1. 优先安装到 D:\gpt-cleaner；如果目录已被占用，先检查是否是旧版 GPT Cleaner，不要覆盖无关文件。
-2. 不要污染我已有 Python / ComfyUI 环境。
-3. 先完整阅读仓库根目录 AGENTS.md，并严格按它执行。
-4. 运行 install.ps1，自动检查 NVIDIA GPU、显存、Python、Git 和依赖。
-5. 允许安装脚本下载 ComfyUI、开源 CCSR 模型及必要依赖，但不要调用任何商业 AI API，也不要把我的图片上传到外部服务。
-6. 遇到可以自动处理的依赖、PATH、CUDA、显存、GitHub/Hugging Face 网络或启动问题，请自行诊断和修复，不要第一时间把步骤甩给我。
-7. ComfyUI 8188 只能监听 127.0.0.1，不允许直接暴露公网。
-8. 安装完成后运行 doctor.ps1。
-9. 启动 GPT Cleaner，确认 http://127.0.0.1:8787/api/health 正常，再自动打开 http://127.0.0.1:8787。
-10. 运行 scripts/smoke_test.py 验证安全清理；如果 ComfyUI/CCSR 可用，再运行 scripts/smoke_test.py --refine 验证 AI 重建。
-11. 最后只向我汇报：是否安装成功、网页地址、GPU/显存识别结果、安全清理 smoke test、AI 重建 smoke test，以及是否有仍需我确认的问题。
+1. 安装到 D:\gpt-cleaner；若目录已存在，先判断是否旧版 GPT Cleaner，不覆盖无关文件。
+2. 先完整阅读 AGENTS.md。
+3. 运行：powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
+4. 使用项目自己的 runtime\venv 和 runtime\ComfyUI，不改全局 Python，不碰其他 ComfyUI。
+5. 允许下载 ComfyUI、PyTorch、旧 CCSR、Juggernaut XL Lightning 和 SUPIR v0Q fp16；不调用商业 AI API，不上传用户图片。
+6. GitHub 或 Hugging Face 直连失败时，按 AGENTS.md 使用 codeload 或 hf-mirror 回退。
+7. 安装后运行 doctor.ps1，启动网页，再依次运行 --safe、--semantic、--ccsr smoke test。
+8. 只有 --semantic 显示 engine=supir 才算语义主路线通过。CCSR 或 safe 回退只能报 PARTIAL。
+9. 自动打开 http://127.0.0.1:8787。
+10. 最后只汇报：安装状态、网页地址、GPU/显存、doctor、三条 smoke test、待确认问题。
 ```
 
-## B. 已经装过旧版，现在升级到 V0.2+
+## C. 真图验收
 
-如果 `D:\gpt-cleaner` 已经存在，并且里面已经下载了几 GB 的 PyTorch / ComfyUI / CCSR 模型，不要删掉重装。让智能体执行：
-
-```text
-请把 D:\gpt-cleaner 升级到 GitHub 最新版：
-https://github.com/Luocatcat/gpt-cleaner
-
-要求：
-1. 先阅读最新 AGENTS.md。
-2. 保留 D:\gpt-cleaner\runtime 下现有 PyTorch、ComfyUI、模型和日志，不要重新下载大模型，除非缺失或损坏。
-3. 保留 config\local.json 的显存配置。
-4. 由于这台机器之前可能是通过 codeload zip 安装、没有 .git 元数据，优先使用最新仓库里的 update.ps1 / UPDATE_GPT_CLEANER.bat 逻辑更新源代码。
-5. 确认以下已知修复存在：
-   - nvidia-smi 不再直接管道到 Select-Object -First 1；
-   - Python Store 存根会被识别并忽略；
-   - huggingface_hub >=1.5,<2；
-   - GitHub codeload fallback；
-   - Hugging Face hf-mirror fallback；
-   - ComfyUI-CCSR __init__.py 含 GPT_CLEANER_SYSPATH_COMPAT。
-6. 更新后重启 GPT Cleaner。
-7. 运行 doctor.ps1。
-8. 运行 scripts/smoke_test.py。
-9. 再运行 scripts/smoke_test.py --refine；如果 AI 重建失败，保留安全清理可用状态并继续诊断，不要删除 runtime 重装。
-10. 自动打开 http://127.0.0.1:8787。
-11. 告诉我新版网页是否出现「安全清理 / AI 重建」两个处理方式，并汇报两条 smoke test 结果。
-```
-
-以后日常使用：
+代码与 smoke test 通过后，再让豆包执行：
 
 ```text
-START_GPT_CLEANER.bat
-```
+使用现代魔女/BJD 三视图原图，在网页选择：
+语义修复 / 标准 / 结构保护 94–98 / 原尺寸 1X。
 
-以后更新：
+确认结果信息写明“实际引擎：SUPIR 语义修复”。
+与原图和研森 1K 对比：假发丝、塑料高光、皮肤脏纹、眼睛玻璃感、关节材质、中频光影、改脸、轮廓漂移、tile 接缝。
 
-```text
-UPDATE_GPT_CLEANER.bat
+保存原图、SUPIR 结果和对比截图。没有研森参考图或没有完成局部对比时，视觉验收必须写 PARTIAL。
 ```

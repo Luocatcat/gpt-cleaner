@@ -2,6 +2,35 @@
   "comfy_url": "http://127.0.0.1:8188",
   "web_host": "0.0.0.0",
   "web_port": 8787,
+  "default_mode": "semantic",
+  "semantic": {
+    "checkpoint": "juggernautXL_v9Rdphoto2Lightning.safetensors",
+    "model_patch": "SUPIR-v0Q_fp16.safetensors",
+    "positive_prompt": "high quality character design reference, clean coherent hair clumps, natural matte skin and resin material, clean glass eyes, coherent medium-scale shading, stable facial features, accurate anatomy, crisp but natural material detail",
+    "negative_prompt": "fake individual hair strands, dirty micro-texture, repetitive AI patterns, plastic highlights, oversharpening, halos, ringing, tile seams, deformed face, changed facial features, changed silhouette, changed joints, text corruption, watermark, blur, low quality",
+    "sampler": "dpmpp_2m_sde",
+    "scheduler": "sgm_uniform",
+    "steps": 10,
+    "cfg": 1.5,
+    "strength_start": 1.0,
+    "strength_end": 0.9,
+    "restore_cfg": 4.0,
+    "restore_cfg_s_tmin": 0.05,
+    "denoise": 1.0,
+    "seed": 123,
+    "vae_tile_decode": 512,
+    "vae_overlap": 64,
+    "debug_intermediates": false
+  },
+  "ccsr": {
+    "model": "real-world_ccsr-fp16.safetensors",
+    "tile_size": 256,
+    "tile_stride": 128,
+    "vae_tile_encode": 512,
+    "vae_tile_decode": 512,
+    "sampling_method": "ccsr_tiled_vae_gaussian_weights",
+    "color_fix": "wavelet"
+  },
   "model": "real-world_ccsr-fp16.safetensors",
   "tile_size": 256,
   "tile_stride": 128,
@@ -9,7 +38,6 @@
   "vae_tile_decode": 512,
   "sampling_method": "ccsr_tiled_vae_gaussian_weights",
   "color_fix": "wavelet",
-  "default_mode": "safe",
   "presets": {
     "light": {
       "preclean_strength": 0.24,
@@ -20,7 +48,11 @@
       "steps": 8,
       "t_max": 0.48,
       "t_min": 0.38,
-      "gen_detail_mix": 0.12
+      "gen_detail_mix": 0.12,
+      "semantic_long_edge": 1024,
+      "semantic_blur_sigma": 0.25,
+      "semantic_preclean_strength": 0.18,
+      "laplacian_generated_mix": [0.68, 0.62, 0.50, 0.38, 0.16, 0.02]
     },
     "standard": {
       "preclean_strength": 0.36,
@@ -31,7 +63,11 @@
       "steps": 12,
       "t_max": 0.54,
       "t_min": 0.40,
-      "gen_detail_mix": 0.20
+      "gen_detail_mix": 0.20,
+      "semantic_long_edge": 896,
+      "semantic_blur_sigma": 0.45,
+      "semantic_preclean_strength": 0.28,
+      "laplacian_generated_mix": [0.78, 0.72, 0.58, 0.46, 0.22, 0.03]
     },
     "heavy": {
       "preclean_strength": 0.50,
@@ -42,7 +78,11 @@
       "steps": 16,
       "t_max": 0.60,
       "t_min": 0.38,
-      "gen_detail_mix": 0.28
+      "gen_detail_mix": 0.28,
+      "semantic_long_edge": 768,
+      "semantic_blur_sigma": 0.65,
+      "semantic_preclean_strength": 0.38,
+      "laplacian_generated_mix": [0.84, 0.78, 0.65, 0.54, 0.28, 0.04]
     }
   }
 }
