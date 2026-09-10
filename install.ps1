@@ -1,5 +1,6 @@
 param(
-    [switch]$NoStart
+    [switch]$NoStart,
+    [switch]$InstallLegacyCCSR
 )
 
 $ErrorActionPreference = 'Stop'
@@ -33,9 +34,7 @@ function Test-RealPython($Exe, $WantedVersion) {
         $exitCode = $LASTEXITCODE
         $version = (($raw | Out-String).Trim())
         return ($exitCode -eq 0 -and $version -eq $WantedVersion)
-    } catch {
-        return $false
-    }
+    } catch { return $false }
 }
 
 function Find-Python312 {
@@ -48,7 +47,6 @@ function Find-Python312 {
             if ($exitCode -eq 0 -and $path -and (Test-Path $path) -and (Test-RealPython $path '3.12')) { return $path }
         } catch {}
     }
-
     $candidates = @(
         (Join-Path $env:LOCALAPPDATA 'Programs\Python\Python312\python.exe'),
         (Join-Path $env:ProgramFiles 'Python312\python.exe')
@@ -56,7 +54,6 @@ function Find-Python312 {
     foreach($p in $candidates) {
         if ((Test-Path $p) -and (Test-RealPython $p '3.12')) { return $p }
     }
-
     $python = Get-Command python -ErrorAction SilentlyContinue
     if ($python -and $python.Source -and (Test-RealPython $python.Source '3.12')) { return $python.Source }
     return $null
@@ -67,12 +64,12 @@ function Download-RepoZip($Repo, $Branch, $Target, $Label) {
     $tmp = Join-Path $env:TEMP ("gpt-cleaner-" + [guid]::NewGuid().ToString('N'))
     $url = "https://codeload.github.com/$Repo/zip/refs/heads/$Branch"
     try {
-        Write-Host "Git clone unavailable/unstable, using codeload zip for $Label..." -ForegroundColor Yellow
-        Invoke-WebRequest -UseBasicParsing -Uri $url -OutFile $zip -TimeoutSec 180
+        Write-Host "Using codeload zip fallback for $Label..." -ForegroundColor Yellow
+        Invoke-WebRequest -UseBasicParsing -Uri $url -OutFile $zip -TimeoutSec 240
         New-Item -ItemType Directory -Force -Path $tmp | Out-Null
         Expand-Archive -Path $zip -DestinationPath $tmp -Force
         $child = Get-ChildItem $tmp -Directory | Select-Object -First 1
-        if (-not $child) { throw "Downloaded zip contained no directory" }
+        if (-not $child) { throw 'Downloaded zip contained no directory' }
         if (Test-Path $Target) { Remove-Item $Target -Recurse -Force }
         New-Item -ItemType Directory -Force -Path (Split-Path -Parent $Target) | Out-Null
         Move-Item $child.FullName $Target
@@ -94,6 +91,29 @@ function Install-Repo($GitExe, $Repo, $Branch, $Target, $Label) {
     }
 }
 
+function Download-HFFile($Python, $RepoId, $Pattern, $TargetDir, $ExpectedFile, $Label) {
+    if (Test-Path $ExpectedFile) {
+        Write-Host "$Label already exists." -ForegroundColor Green
+        return
+    }
+    New-Item -ItemType Directory -Force -Path $TargetDir | Out-Null
+    $env:HF_HUB_DISABLE_XET = '1'
+    $pyCode = "from huggingface_hub import snapshot_download; snapshot_download(repo_id='$RepoId', allow_patterns=['$Pattern'], local_dir=r'$TargetDir')"
+    Write-Host "Downloading $Label from Hugging Face..." -ForegroundColor Cyan
+    & $Python -c $pyCode
+    $directExit = $LASTEXITCODE
+    if ($directExit -ne 0 -or -not (Test-Path $ExpectedFile)) {
+        Write-Host 'Direct Hugging Face route failed. Retrying through hf-mirror.com...' -ForegroundColor Yellow
+        $env:HF_ENDPOINT = 'https://hf-mirror.com'
+        & $Python -c $pyCode
+        $mirrorExit = $LASTEXITCODE
+        Remove-Item Env:HF_ENDPOINT -ErrorAction SilentlyContinue
+        if ($mirrorExit -ne 0 -or -not (Test-Path $ExpectedFile)) {
+            Die "$Label download failed on both direct and mirror routes."
+        }
+    }
+}
+
 Set-Location $Root
 New-Item -ItemType Directory -Force -Path $Runtime | Out-Null
 
@@ -104,6 +124,7 @@ if (-not $nvidia) {
     if (Test-Path $nv) { $nvidia = Get-Item $nv }
 }
 if (-not $nvidia) { Die 'nvidia-smi not found. Install/update the NVIDIA driver first.' }
+# Collect complete output before selecting the first row. PowerShell 5.1 can otherwise kill nvidia-smi early.
 $gpuOutput = @(& $nvidia.Source --query-gpu=name,memory.total --format=csv,noheader,nounits 2>$null)
 $gpuExit = $LASTEXITCODE
 $gpuLine = $gpuOutput | Where-Object { $_ -and $_.Trim() } | Select-Object -First 1
@@ -113,7 +134,7 @@ if ($parts.Count -lt 2) { Die "Unexpected nvidia-smi output: $gpuLine" }
 $gpuName = $parts[0].Trim()
 $vramMB = [int](($parts[1]).Trim())
 Write-Host "GPU: $gpuName | VRAM: $vramMB MB" -ForegroundColor Green
-if ($vramMB -lt 6000) { Die 'Less than 6 GB VRAM is not supported by the current preset.' }
+if ($vramMB -lt 6000) { Die 'Less than 6 GB VRAM is not supported by the current semantic preset.' }
 
 Step 'Checking Git'
 $git = Find-Git
@@ -157,25 +178,33 @@ Install-Repo $git 'Comfy-Org/ComfyUI' 'master' $Comfy 'ComfyUI'
 & $Vpy -m pip install --timeout 180 --retries 8 -r (Join-Path $Comfy 'requirements.txt')
 if ($LASTEXITCODE -ne 0) { Die 'ComfyUI requirements installation failed.' }
 
-Step 'Installing CCSR ComfyUI node'
 $CustomNodes = Join-Path $Comfy 'custom_nodes'
-$CCSRNode = Join-Path $CustomNodes 'ComfyUI-CCSR'
 New-Item -ItemType Directory -Force -Path $CustomNodes | Out-Null
-Install-Repo $git 'kijai/ComfyUI-CCSR' 'main' $CCSRNode 'ComfyUI-CCSR'
-$nodeReq = Join-Path $CCSRNode 'requirements.txt'
-if (Test-Path $nodeReq) {
-    & $Vpy -m pip install --timeout 180 --retries 8 -r $nodeReq
-    if ($LASTEXITCODE -ne 0) { Die 'CCSR node requirements installation failed.' }
+
+Step 'Installing SUPIR semantic restoration node'
+$SUPIRNode = Join-Path $CustomNodes 'ComfyUI-SUPIR'
+Install-Repo $git 'kijai/ComfyUI-SUPIR' 'main' $SUPIRNode 'ComfyUI-SUPIR'
+$SUPIRReq = Join-Path $SUPIRNode 'requirements.txt'
+if (Test-Path $SUPIRReq) {
+    & $Vpy -m pip install --timeout 180 --retries 8 -r $SUPIRReq
+    if ($LASTEXITCODE -ne 0) { Die 'SUPIR node requirements installation failed.' }
 }
 
-# Newer ComfyUI versions no longer guarantee custom_nodes is on sys.path.
-# ComfyUI-CCSR dynamically imports modules through its package folder name, so register the parent explicitly.
-$nodeInit = Join-Path $CCSRNode '__init__.py'
-if (Test-Path $nodeInit) {
-    $initText = Get-Content $nodeInit -Raw
-    $marker = '# GPT_CLEANER_SYSPATH_COMPAT'
-    if ($initText -notmatch [regex]::Escape($marker)) {
-        $compat = @"
+if ($InstallLegacyCCSR) {
+    Step 'Installing legacy CCSR fallback'
+    $CCSRNode = Join-Path $CustomNodes 'ComfyUI-CCSR'
+    Install-Repo $git 'kijai/ComfyUI-CCSR' 'main' $CCSRNode 'ComfyUI-CCSR'
+    $nodeReq = Join-Path $CCSRNode 'requirements.txt'
+    if (Test-Path $nodeReq) {
+        & $Vpy -m pip install --timeout 180 --retries 8 -r $nodeReq
+        if ($LASTEXITCODE -ne 0) { Die 'CCSR node requirements installation failed.' }
+    }
+    $nodeInit = Join-Path $CCSRNode '__init__.py'
+    if (Test-Path $nodeInit) {
+        $initText = Get-Content $nodeInit -Raw
+        $marker = '# GPT_CLEANER_SYSPATH_COMPAT'
+        if ($initText -notmatch [regex]::Escape($marker)) {
+            $compat = @"
 $marker
 import os as _gc_os, sys as _gc_sys
 _gc_custom_nodes = _gc_os.path.dirname(_gc_os.path.dirname(_gc_os.path.abspath(__file__)))
@@ -183,7 +212,8 @@ if _gc_custom_nodes not in _gc_sys.path:
     _gc_sys.path.insert(0, _gc_custom_nodes)
 
 "@
-        Set-Content -Path $nodeInit -Value ($compat + $initText) -Encoding UTF8
+            Set-Content -Path $nodeInit -Value ($compat + $initText) -Encoding UTF8
+        }
     }
 }
 
@@ -191,44 +221,59 @@ Step 'Installing GPT Cleaner web runtime'
 & $Vpy -m pip install --timeout 180 --retries 8 -r (Join-Path $Root 'app\requirements.txt')
 if ($LASTEXITCODE -ne 0) { Die 'GPT Cleaner app requirements installation failed.' }
 
-Step 'Downloading fp16 CCSR model'
-$ModelDir = Join-Path $Comfy 'models\CCSR'
-New-Item -ItemType Directory -Force -Path $ModelDir | Out-Null
-$ModelPath = Join-Path $ModelDir 'real-world_ccsr-fp16.safetensors'
-if (-not (Test-Path $ModelPath)) {
-    $env:HF_HUB_DISABLE_XET = '1'
-    $download = "from huggingface_hub import snapshot_download; snapshot_download(repo_id='Kijai/ccsr-safetensors', allow_patterns=['*real-world_ccsr-fp16.safetensors*'], local_dir=r'$ModelDir')"
-    & $Vpy -c $download
-    if ($LASTEXITCODE -ne 0 -or -not (Test-Path $ModelPath)) {
-        Write-Host 'Hugging Face direct download failed. Retrying through hf-mirror.com...' -ForegroundColor Yellow
-        $env:HF_ENDPOINT = 'https://hf-mirror.com'
-        & $Vpy -c $download
-        Remove-Item Env:HF_ENDPOINT -ErrorAction SilentlyContinue
-    }
-    if ($LASTEXITCODE -ne 0 -or -not (Test-Path $ModelPath)) { Die 'CCSR model download failed on both direct and mirror routes.' }
+Step 'Downloading semantic restoration models'
+$CheckpointDir = Join-Path $Comfy 'models\checkpoints'
+New-Item -ItemType Directory -Force -Path $CheckpointDir | Out-Null
+$SUPIRModel = Join-Path $CheckpointDir 'SUPIR-v0Q_fp16.safetensors'
+$SDXLModel = Join-Path $CheckpointDir 'sd_xl_base_1.0.safetensors'
+Download-HFFile $Vpy 'Kijai/SUPIR_pruned' 'SUPIR-v0Q_fp16.safetensors' $CheckpointDir $SUPIRModel 'SUPIR-v0Q fp16 (about 2.7 GB)'
+Download-HFFile $Vpy 'stabilityai/stable-diffusion-xl-base-1.0' 'sd_xl_base_1.0.safetensors' $CheckpointDir $SDXLModel 'SDXL base checkpoint (about 6.9 GB)'
+
+if ($InstallLegacyCCSR) {
+    Step 'Downloading legacy CCSR model'
+    $CCSRDir = Join-Path $Comfy 'models\CCSR'
+    $CCSRModel = Join-Path $CCSRDir 'real-world_ccsr-fp16.safetensors'
+    Download-HFFile $Vpy 'Kijai/ccsr-safetensors' '*real-world_ccsr-fp16.safetensors*' $CCSRDir $CCSRModel 'legacy CCSR fp16'
 }
 
-Step 'Writing VRAM-aware local config'
+Step 'Writing VRAM-aware V0.3 config'
 $defaultConfig = Join-Path $ConfigDir 'default.json'
 $localConfig = Join-Path $ConfigDir 'local.json'
 $config = Get-Content $defaultConfig -Raw | ConvertFrom-Json
 if ($vramMB -lt 7500) {
-    $config.tile_size = 192; $config.tile_stride = 96
+    $config.supir.sampler_tile_size = 384
+    $config.supir.sampler_tile_stride = 192
+    $config.supir.vae_tile_pixels = 384
+    $config.ccsr.tile_size = 192
+    $config.ccsr.tile_stride = 96
 } elseif ($vramMB -lt 10500) {
-    $config.tile_size = 256; $config.tile_stride = 128
+    $config.supir.sampler_tile_size = 512
+    $config.supir.sampler_tile_stride = 256
+    $config.supir.vae_tile_pixels = 512
+    $config.ccsr.tile_size = 256
+    $config.ccsr.tile_stride = 128
 } elseif ($vramMB -lt 15000) {
-    $config.tile_size = 384; $config.tile_stride = 192
+    $config.supir.sampler_tile_size = 640
+    $config.supir.sampler_tile_stride = 320
+    $config.supir.vae_tile_pixels = 640
+    $config.ccsr.tile_size = 384
+    $config.ccsr.tile_stride = 192
 } else {
-    $config.tile_size = 512; $config.tile_stride = 256
+    $config.supir.sampler_tile_size = 768
+    $config.supir.sampler_tile_stride = 384
+    $config.supir.vae_tile_pixels = 768
+    $config.ccsr.tile_size = 512
+    $config.ccsr.tile_stride = 256
 }
+$config.default_mode = 'semantic'
 $config | ConvertTo-Json -Depth 20 | Set-Content -Path $localConfig -Encoding UTF8
-Write-Host "Preset: tile=$($config.tile_size), stride=$($config.tile_stride)" -ForegroundColor Green
+Write-Host "SUPIR tile=$($config.supir.sampler_tile_size), stride=$($config.supir.sampler_tile_stride), fp8_unet=$($config.supir.fp8_unet)" -ForegroundColor Green
 
 Step 'Running doctor'
 & powershell -ExecutionPolicy Bypass -File (Join-Path $Root 'doctor.ps1')
 if ($LASTEXITCODE -ne 0) { Die 'Doctor found a critical problem. Review messages above.' }
 
-Write-Host "`nGPT Cleaner installation complete." -ForegroundColor Green
+Write-Host "`nGPT Cleaner V0.3 installation complete." -ForegroundColor Green
 if (-not $NoStart) {
     Step 'Launching GPT Cleaner'
     & powershell -ExecutionPolicy Bypass -File (Join-Path $Root 'start.ps1')
