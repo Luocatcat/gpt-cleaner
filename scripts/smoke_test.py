@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import io
 import sys
 from pathlib import Path
@@ -9,77 +10,94 @@ import requests
 from PIL import Image, ImageDraw
 
 BASE = "http://127.0.0.1:8787"
+ROOT = Path(__file__).resolve().parents[1]
+RUNTIME = ROOT / "runtime"
 
 
 def make_test_image() -> io.BytesIO:
-    image = Image.new("RGB", (256, 256), "#d8d8dc")
+    image = Image.new("RGB", (512, 320), "#e5e5e8")
     draw = ImageDraw.Draw(image)
-    draw.ellipse((54, 38, 202, 186), fill="#25262c")
-    draw.rectangle((70, 165, 186, 224), fill="#111216")
-    draw.ellipse((92, 92, 115, 115), fill="#b88cff")
-    draw.ellipse((141, 92, 164, 115), fill="#6d647d")
-    # Add deliberately noisy high-frequency stripes to exercise the cleaner.
-    for x in range(70, 187, 4):
-        draw.line((x, 168, x + 10, 220), fill="#25262c", width=1)
+    draw.ellipse((80, 35, 250, 205), fill="#26272d")
+    draw.rectangle((112, 175, 218, 288), fill="#f0d9d4")
+    draw.ellipse((125, 105, 157, 137), fill="#ad82ef")
+    draw.ellipse((180, 105, 212, 137), fill="#5e596c")
+    draw.rectangle((315, 70, 420, 250), fill="#f0d9d4")
+    # Artificial high-frequency junk for the cleaner to remove/rebuild.
+    for x in range(90, 240, 6):
+        draw.line((x, 55, x + 25, 180), fill="#4d4d55", width=1)
     buf = io.BytesIO()
     image.save(buf, format="PNG")
     buf.seek(0)
     return buf
 
 
-def run_clean(mode: str, timeout: int) -> bytes:
-    buf = make_test_image()
-    files = {"image": ("smoke.png", buf, "image/png")}
-    data = {
-        "mode": mode,
-        "preset": "light",
-        "structure": "0.97",
-        "scale": "1",
-    }
-    response = requests.post(f"{BASE}/api/clean", files=files, data=data, timeout=timeout)
-    response.raise_for_status()
-    return response.content
+def check_health(require_supir: bool) -> bool:
+    try:
+        response = requests.get(f"{BASE}/api/health", timeout=8)
+        response.raise_for_status()
+        data = response.json()
+        print("health:", data)
+        if require_supir and not data.get("supir"):
+            print("FAIL: SUPIR engine is not ready")
+            return False
+        return True
+    except Exception as exc:  # noqa: BLE001
+        print(f"FAIL health: {exc}")
+        return False
+
+
+def run_clean(mode: str) -> int:
+    if not check_health(require_supir=(mode == "semantic")):
+        return 1
+    files = {"image": ("smoke.png", make_test_image(), "image/png")}
+    data = {"mode": mode, "preset": "light", "structure": "0.96"}
+    try:
+        response = requests.post(f"{BASE}/api/clean", files=files, data=data, timeout=1800)
+        response.raise_for_status()
+    except Exception as exc:  # noqa: BLE001
+        body = getattr(locals().get("response"), "text", "")
+        print(f"FAIL clean: {exc}\n{body[:1600]}")
+        return 1
+    out = RUNTIME / f"smoke_{mode}.png"
+    out.write_bytes(response.content)
+    print(f"PASS {mode}: {out}")
+    return 0
+
+
+def run_benchmark() -> int:
+    if not check_health(require_supir=True):
+        return 1
+    files = {"image": ("smoke.png", make_test_image(), "image/png")}
+    try:
+        response = requests.post(f"{BASE}/api/benchmark", files=files, timeout=3600)
+        response.raise_for_status()
+        data = response.json()
+    except Exception as exc:  # noqa: BLE001
+        body = getattr(locals().get("response"), "text", "")
+        print(f"FAIL benchmark: {exc}\n{body[:1600]}")
+        return 1
+    out_dir = RUNTIME / "smoke_benchmark"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    for name, data_url in data.get("images", {}).items():
+        payload = data_url.split(",", 1)[1]
+        (out_dir / f"{name}.png").write_bytes(base64.b64decode(payload))
+    print(f"PASS benchmark: {out_dir}")
+    print("debug:", data.get("debug_dir"))
+    return 0
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--refine", action="store_true", help="also exercise the optional ComfyUI/CCSR route")
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument("--semantic", action="store_true", help="run one SUPIR semantic pass")
+    group.add_argument("--benchmark", action="store_true", help="run the 4-way V0.3 benchmark")
+    group.add_argument("--safe", action="store_true", help="run deterministic safe fallback")
     args = parser.parse_args()
-
-    try:
-        health = requests.get(f"{BASE}/api/health", timeout=5)
-        health.raise_for_status()
-        health_json = health.json()
-    except Exception as exc:  # noqa: BLE001
-        print(f"FAIL health: {exc}")
-        return 1
-
-    root = Path(__file__).resolve().parents[1]
-
-    try:
-        safe_bytes = run_clean("safe", 120)
-    except Exception as exc:  # noqa: BLE001
-        print(f"FAIL safe clean: {exc}")
-        return 1
-
-    safe_out = root / "runtime" / "smoke_test_safe.png"
-    safe_out.write_bytes(safe_bytes)
-    print(f"PASS safe: {safe_out}")
-
-    if args.refine:
-        if not health_json.get("comfy"):
-            print("FAIL refine requested but /api/health reports comfy=false")
-            return 1
-        try:
-            refine_bytes = run_clean("refine", 900)
-        except Exception as exc:  # noqa: BLE001
-            print(f"FAIL refine: {exc}")
-            return 1
-        refine_out = root / "runtime" / "smoke_test_refine.png"
-        refine_out.write_bytes(refine_bytes)
-        print(f"PASS refine: {refine_out}")
-
-    return 0
+    if args.benchmark:
+        return run_benchmark()
+    if args.semantic:
+        return run_clean("semantic")
+    return run_clean("safe")
 
 
 if __name__ == "__main__":
